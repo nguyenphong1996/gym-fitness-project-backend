@@ -1,24 +1,19 @@
 {
-  "name": "backend-project",
-  "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "name": "gym-fitness-project-backend",
+  "version": "0.0.0",
+  "private": true,
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "node src/index.js",
-    "dev": "nodemon src/index.js"
+    "start": "node ./bin/www",
+    "dev": "nodemon ./bin/www"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "type": "commonjs",
   "dependencies": {
-    "cors": "^2.8.5",
-    "dotenv": "^17.2.2",
-    "express": "^5.1.0",
-    "mongodb": "^6.20.0"
-  },
-  "devDependencies": {
+    "cookie-parser": "~1.4.4",
+    "debug": "~2.6.9",
+    "dotenv": "^17.2.3",
+    "express": "~4.16.1",
+    "mongodb": "^6.20.0",
+    "mongoose": "^8.19.1",
+    "morgan": "~1.9.1",
     "nodemon": "^3.1.10"
   }
 }
