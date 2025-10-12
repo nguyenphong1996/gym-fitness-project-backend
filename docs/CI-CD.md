@@ -24,6 +24,12 @@ Mỗi khi push code hoặc tạo Pull Request, GitHub Actions sẽ tự động 
        ▼
 ┌─────────────┐
 │Code Quality │ ← Check lint, format, security
+└──────┬──────┘
+       │
+       ▼
+┌─────────────┐
+│Build Docker │ ← Build & push image (chỉ main/develop)
+│   Image     │   → ghcr.io/nguyenphong1996/gym-fitness-project-backend
 └─────────────┘
 ```
 
@@ -47,6 +53,68 @@ Mỗi khi push code hoặc tạo Pull Request, GitHub Actions sẽ tự động 
 - Check code formatting
 - Tìm TODO/FIXME comments
 - Code quality metrics
+
+### 4️⃣ **Build & Push Docker Image** 🐳
+- **Chỉ chạy khi push vào `main` hoặc `develop`**
+- Build Docker image với multi-stage build
+- Push lên GitHub Container Registry (ghcr.io)
+- Tags:
+  - `latest` (cho main branch)
+  - `develop` (cho develop branch)
+  - `main-<commit-sha>` hoặc `develop-<commit-sha>`
+
+**Docker Image URL:**
+```
+ghcr.io/nguyenphong1996/gym-fitness-project-backend:latest
+ghcr.io/nguyenphong1996/gym-fitness-project-backend:develop
+ghcr.io/nguyenphong1996/gym-fitness-project-backend:main-abc1234
+```
+
+---
+
+## 🐳 Docker Setup
+
+### Dockerfile
+Project có multi-stage Dockerfile để:
+- **Build stage**: Install dependencies
+- **Production stage**: Tối ưu size image với Alpine Linux
+- **Security**: Chạy với non-root user
+- **Health check**: Endpoint `/health` để check container healthy
+
+### Chạy Docker local
+```bash
+# Build image
+docker build -t gym-fitness-backend:local .
+
+# Run container
+docker run -d \
+  -p 3000:3000 \
+  --env-file .env \
+  --name gym-fitness-backend \
+  gym-fitness-backend:local
+
+# Check logs
+docker logs -f gym-fitness-backend
+
+# Stop container
+docker stop gym-fitness-backend
+docker rm gym-fitness-backend
+```
+
+### Pull image từ GitHub Container Registry
+```bash
+# Login (cần Personal Access Token với quyền read:packages)
+echo $GITHUB_TOKEN | docker login ghcr.io -u nguyenphong1996 --password-stdin
+
+# Pull image
+docker pull ghcr.io/nguyenphong1996/gym-fitness-project-backend:latest
+
+# Run
+docker run -d \
+  -p 3000:3000 \
+  --env-file .env \
+  ghcr.io/nguyenphong1996/gym-fitness-project-backend:latest
+```
 
 ---
 
@@ -137,10 +205,13 @@ deploy-production:
 
 ## 📝 Notes
 
-- ✅ CI hiện tại **chỉ check code quality**, không deploy
-- ✅ **Không cần VPS** để CI chạy
+- ✅ CI check code quality và build Docker image
+- ✅ **Docker image chỉ được build khi push vào `main` hoặc `develop`**
+- ✅ Feature branches chỉ chạy test + build, **không** build Docker
 - ✅ CI chạy **miễn phí** trên GitHub Actions (2000 minutes/month)
+- ✅ Docker images được lưu tại **GitHub Container Registry (ghcr.io)**
 - ⚠️ MongoDB connection trong CI sẽ skip (vì không có MONGO_URI trong CI)
+- 🐳 Docker image size: ~150MB (với Alpine Linux)
 
 ---
 
