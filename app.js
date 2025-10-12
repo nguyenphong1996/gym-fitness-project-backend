@@ -1,4 +1,3 @@
-
 var express = require('express');
 var path = require('path');
 var cookieParser = require('cookie-parser');
@@ -8,6 +7,9 @@ require('dotenv').config();
 
 var indexRouter = require('./routes/index');
 var usersRouter = require('./routes/users');
+var otpRouter = require('./src/routes/otp');
+var authRouter = require('./src/routes/auth');
+var userRouter = require('./src/routes/user');
 
 var app = express();
 connectDB();
@@ -20,7 +22,9 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 app.use('/', indexRouter);
 app.use('/users', usersRouter);
-app.get('/', (req, res) => res.send('Server OK + MongoDB connected!'));
+app.use('/otp', otpRouter);
+app.use('/api/auth', authRouter);
+app.use('/api/user', userRouter);
 
 module.exports = app;
 
