@@ -27,7 +27,7 @@ const authController = require('../controllers/authController');
  *             properties:
  *               phone:
  *                 type: string
- *                 description: Số điện thoại (10-11 số)
+ *                 description: Số điện thoại (10 số)
  *                 example: "0912345678"
  *     responses:
  *       200:
@@ -49,7 +49,7 @@ const authController = require('../controllers/authController');
  *                 dev_otp:
  *                   type: string
  *                   description: Chỉ có trong sandbox mode
- *                   example: "123456"
+ *                   example: "1234"
  *       400:
  *         description: Lỗi validation hoặc số điện thoại đã tồn tại
  *         content:
@@ -75,15 +75,15 @@ router.post('/register', authController.register);
  *             type: object
  *             required:
  *               - phone
- *               - otp
+ *               - code
  *             properties:
  *               phone:
  *                 type: string
  *                 example: "0912345678"
- *               otp:
+ *               code:
  *                 type: string
- *                 description: Mã OTP 6 số
- *                 example: "123456"
+ *                 description: Mã OTP 4 số
+ *                 example: "1234"
  *     responses:
  *       200:
  *         description: Xác thực thành công, trả về token
@@ -150,7 +150,7 @@ router.post('/verify-register', authController.verifyRegister);
  *                 dev_otp:
  *                   type: string
  *                   description: Chỉ có trong sandbox mode
- *                   example: "123456"
+ *                   example: "1234"
  *       400:
  *         description: Số điện thoại không tồn tại hoặc chưa xác thực
  *       429:
@@ -172,14 +172,14 @@ router.post('/login', authController.login);
  *             type: object
  *             required:
  *               - phone
- *               - otp
+ *               - code
  *             properties:
  *               phone:
  *                 type: string
  *                 example: "0912345678"
- *               otp:
+ *               code:
  *                 type: string
- *                 example: "123456"
+ *                 example: "1234"
  *     responses:
  *       200:
  *         description: Đăng nhập thành công
