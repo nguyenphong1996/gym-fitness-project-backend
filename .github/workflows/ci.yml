@@ -100,7 +100,6 @@ jobs:
     name: Build & Push Docker Image
     runs-on: ubuntu-latest
     needs: [test, build]
-    # Run Docker publish on pushes to main, develop, or the feature CI branch
     if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop' || github.ref == 'refs/heads/feature/ci-cd-pipeline')
     
     permissions:
