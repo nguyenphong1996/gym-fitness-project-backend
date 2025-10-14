@@ -6,21 +6,13 @@ const options = {
     info: {
       title: 'Gym Fitness API',
       version: '1.0.0',
-      description: 'API documentation cho Gym Fitness Project - Phone-based OTP Authentication',
-      contact: {
-        name: 'API Support',
-        email: 'support@gymfitness.com'
-      }
+      description: 'Trang hướng dẫn setup API cho dự án Gym Fitness',
     },
     servers: [
       {
         url: 'https://be.phongnguyen.software',
         description: 'Production server'
       },
-      {
-        url: 'http://localhost:3000',
-        description: 'Development server'
-      }
     ],
     components: {
       securitySchemes: {
