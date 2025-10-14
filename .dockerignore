@@ -16,4 +16,3 @@ dist
 build
 logs
 *.log
-.todo-plan.json
