@@ -14,12 +14,12 @@ const options = {
     },
     servers: [
       {
-        url: 'http://localhost:3000',
-        description: 'Development server'
+        url: 'https://be.phongnguyen.software',
+        description: 'Production server'
       },
       {
-        url: 'https://api.gymfitness.com',
-        description: 'Production server'
+        url: 'http://localhost:3000',
+        description: 'Development server'
       }
     ],
     components: {
