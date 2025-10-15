@@ -17,6 +17,7 @@ exports.getProfile = async (req, res) => {
       name: user.name || null,
       email: user.email || null,
       avatarUrl: user.avatarUrl || null,
+      gender: user.gender || null,
       dob: user.dob || null,
       weight: user.weight || null,
       height: user.height || null,
@@ -42,7 +43,7 @@ exports.getProfile = async (req, res) => {
 exports.updateProfile = async (req, res) => {
   try {
     const User = require('../models/User');
-    const allowed = ['name', 'email', 'avatarUrl', 'dob', 'weight', 'height'];
+    const allowed = ['name', 'email', 'avatarUrl', 'gender', 'dob', 'weight', 'height'];
     const updates = {};
 
     // Basic validation and whitelist - only add fields that are actually provided
@@ -95,6 +96,19 @@ exports.updateProfile = async (req, res) => {
           new URL(updates.avatarUrl);
         } catch (e) {
           return res.status(400).json({ error: 'invalid_avatar', message: 'Avatar URL must be a valid URL' });
+        }
+      }
+    }
+
+    // Validate gender (if provided and not null/empty)
+    if (updates.hasOwnProperty('gender')) {
+      if (updates.gender !== null && updates.gender !== undefined && updates.gender !== '') {
+        const validGenders = ['male', 'female', 'other'];
+        if (!validGenders.includes(updates.gender)) {
+          return res.status(400).json({ 
+            error: 'invalid_gender', 
+            message: 'Gender must be one of: male, female, other' 
+          });
         }
       }
     }
@@ -180,6 +194,7 @@ exports.updateProfile = async (req, res) => {
         name: user.name,
         email: user.email,
         avatarUrl: user.avatarUrl,
+        gender: user.gender,
         dob: user.dob,
         weight: user.weight,
         height: user.height,

@@ -9,9 +9,10 @@ const UserSchema = new mongoose.Schema({
   name: { type: String, trim: true },
   email: { type: String, trim: true, lowercase: true, index: true },
   avatarUrl: { type: String, trim: true },
+  gender: { type: String, enum: ['male', 'female', 'other'], trim: true }, // Giới tính
   dob: { type: Date },
-  weight: { type: Number }, // kg
-  height: { type: Number }, // meters or cm as your app expects
+  weight: { type: Number, min: 0, max: 100 }, // kg
+  height: { type: Number, min: 0, max: 200 }, // cm
 
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now }

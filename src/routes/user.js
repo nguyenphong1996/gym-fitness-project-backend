@@ -52,6 +52,12 @@ const authMiddleware = require('../middlewares/authMiddleware');
  *                       type: string
  *                       nullable: true
  *                       example: "https://example.com/avatar.jpg"
+ *                     gender:
+ *                       type: string
+ *                       nullable: true
+ *                       enum: [male, female, other]
+ *                       example: "male"
+ *                       description: "Giới tính: nam, nữ, hoặc khác"
  *                     dob:
  *                       type: string
  *                       format: date
@@ -144,6 +150,11 @@ router.get('/profile', authMiddleware, userController.getProfile);
  *                 format: uri
  *                 example: "https://example.com/avatar.jpg"
  *                 description: "URL ảnh đại diện"
+ *               gender:
+ *                 type: string
+ *                 enum: [male, female, other]
+ *                 example: "male"
+ *                 description: "Giới tính: male (nam), female (nữ), hoặc other (khác)"
  *               dob:
  *                 type: string
  *                 format: date
@@ -168,6 +179,7 @@ router.get('/profile', authMiddleware, userController.getProfile);
  *                 name: "Nguyen Van A"
  *                 email: "user@gmail.com"
  *                 avatarUrl: "https://example.com/avatar.jpg"
+ *                 gender: "male"
  *                 dob: "1990-01-15"
  *                 weight: 70
  *                 height: 175
@@ -212,6 +224,9 @@ router.get('/profile', authMiddleware, userController.getProfile);
  *                     avatarUrl:
  *                       type: string
  *                       example: "https://example.com/avatar.jpg"
+ *                     gender:
+ *                       type: string
+ *                       example: "male"
  *                     dob:
  *                       type: string
  *                       format: date
@@ -254,6 +269,11 @@ router.get('/profile', authMiddleware, userController.getProfile);
  *                 value:
  *                   error: "invalid_email"
  *                   message: "Email format is invalid"
+ *               invalidGender:
+ *                 summary: Giới tính không hợp lệ
+ *                 value:
+ *                   error: "invalid_gender"
+ *                   message: "Gender must be one of: male, female, other"
  *               invalidWeight:
  *                 summary: Cân nặng không hợp lệ
  *                 value:
