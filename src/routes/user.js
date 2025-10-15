@@ -318,4 +318,248 @@ router.get('/profile', authMiddleware, userController.getProfile);
  */
 router.put('/profile', authMiddleware, userController.updateProfile);
 
+/**
+ * @swagger
+ * /api/user/account/delete/request:
+ *   post:
+ *     summary: Yêu cầu xóa tài khoản - Gửi OTP xác nhận
+ *     description: |
+ *       **⚠️ CẢNH BÁO: TÍNH NĂNG NGUY HIỂM**
+ *       
+ *       Bước 1 của quy trình xóa tài khoản. API sẽ gửi mã OTP đến số điện thoại để xác nhận.
+ *       
+ *       **Lưu ý quan trọng:**
+ *       - ❌ Xóa tài khoản là hành động **KHÔNG THỂ HOÀN TÁC**
+ *       - 🗑️ Tất cả dữ liệu người dùng sẽ bị **XÓA VĨNH VIỄN**
+ *       - 📊 Bao gồm: profile, lịch sử, tất cả dữ liệu liên quan
+ *       
+ *       **Rate Limiting:**
+ *       - Tối đa 50 requests/giờ
+ *       - Cooldown: 10 giây giữa mỗi lần gửi
+ *       
+ *       **Sandbox Mode:** API sẽ trả về dev_otp và chấp nhận bất kỳ mã OTP 4 số nào.
+ *     tags: [User]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: OTP đã được gửi thành công
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 ok:
+ *                   type: boolean
+ *                   example: true
+ *                 message:
+ *                   type: string
+ *                   example: "OTP sent to your phone (sandbox mode)"
+ *                 dev_otp:
+ *                   type: string
+ *                   description: Mã OTP (chỉ có trong sandbox mode)
+ *                   example: "4525"
+ *                 expiresIn:
+ *                   type: number
+ *                   description: Thời gian hết hạn (giây)
+ *                   example: 600
+ *       401:
+ *         description: Không có quyền truy cập
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
+ *                   example: "unauthorized"
+ *                 message:
+ *                   type: string
+ *                   example: "No token provided"
+ *       404:
+ *         description: User không tồn tại
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
+ *                   example: "user_not_found"
+ *                 message:
+ *                   type: string
+ *                   example: "User not found"
+ *       429:
+ *         description: Vượt quá rate limit hoặc cooldown chưa hết
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
+ *                   enum: [rate_limit_exceeded, cooldown_active]
+ *                   example: "cooldown_active"
+ *                 message:
+ *                   type: string
+ *                   example: "Please wait 8s before resending"
+ *       500:
+ *         description: Lỗi server
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
+ *                   example: "delete_request_error"
+ *                 message:
+ *                   type: string
+ *                   example: "Failed to send OTP"
+ */
+router.post('/account/delete/request', authMiddleware, userController.requestDeleteAccount);
+
+/**
+ * @swagger
+ * /api/user/account/delete/confirm:
+ *   delete:
+ *     summary: Xác nhận xóa tài khoản - PERMANENT DELETE
+ *     description: |
+ *       **⚠️ CẢNH BÁO: HÀNH ĐỘNG KHÔNG THỂ HOÀN TÁC ⚠️**
+ *       
+ *       Bước 2 của quy trình xóa tài khoản. Sau khi xác thực OTP thành công:
+ *       - 🗑️ Tài khoản sẽ bị **XÓA VĨNH VIỄN**
+ *       - ❌ **TẤT CẢ** dữ liệu liên quan sẽ bị xóa
+ *       - 🚫 **KHÔNG THỂ KHÔI PHỤC**
+ *       
+ *       **Yêu cầu:**
+ *       - Phải gọi `/account/delete/request` trước để nhận OTP
+ *       - OTP có hiệu lực 10 phút
+ *       - Tối đa 5 lần thử
+ *       
+ *       **Sandbox Mode:** Chấp nhận bất kỳ mã OTP 4 số nào
+ *     tags: [User]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - code
+ *             properties:
+ *               code:
+ *                 type: string
+ *                 example: "1234"
+ *                 description: "Mã OTP nhận được từ SMS (4 chữ số)"
+ *     responses:
+ *       200:
+ *         description: Tài khoản đã bị xóa thành công
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 ok:
+ *                   type: boolean
+ *                   example: true
+ *                 message:
+ *                   type: string
+ *                   example: "Account deleted successfully (sandbox mode)"
+ *       400:
+ *         description: Validation error hoặc OTP không hợp lệ
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
+ *                   enum: [missing_otp, invalid_otp_format, no_otp_request, otp_expired, invalid_otp]
+ *                 message:
+ *                   type: string
+ *             examples:
+ *               missingOtp:
+ *                 summary: Thiếu mã OTP
+ *                 value:
+ *                   error: "missing_otp"
+ *                   message: "OTP code is required"
+ *               invalidFormat:
+ *                 summary: Format OTP không hợp lệ
+ *                 value:
+ *                   error: "invalid_otp_format"
+ *                   message: "OTP must be exactly 4 digits"
+ *               noRequest:
+ *                 summary: Chưa request OTP
+ *                 value:
+ *                   error: "no_otp_request"
+ *                   message: "No OTP request found. Please request OTP first."
+ *               expired:
+ *                 summary: OTP hết hạn
+ *                 value:
+ *                   error: "otp_expired"
+ *                   message: "OTP has expired. Please request a new one."
+ *               invalidOtp:
+ *                 summary: Mã OTP sai
+ *                 value:
+ *                   error: "invalid_otp"
+ *                   message: "Invalid OTP code"
+ *       401:
+ *         description: Không có quyền truy cập
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
+ *                   example: "unauthorized"
+ *                 message:
+ *                   type: string
+ *                   example: "No token provided"
+ *       404:
+ *         description: User không tồn tại
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
+ *                   example: "user_not_found"
+ *                 message:
+ *                   type: string
+ *                   example: "User not found"
+ *       429:
+ *         description: Quá số lần thử
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
+ *                   example: "too_many_attempts"
+ *                 message:
+ *                   type: string
+ *                   example: "Maximum verification attempts exceeded"
+ *       500:
+ *         description: Lỗi server
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
+ *                   example: "server_error"
+ *                 message:
+ *                   type: string
+ *                   example: "Failed to delete account"
+ */
+router.delete('/account/delete/confirm', authMiddleware, userController.confirmDeleteAccount);
+
 module.exports = router;
+
