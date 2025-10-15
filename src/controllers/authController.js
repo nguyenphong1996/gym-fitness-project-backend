@@ -81,6 +81,13 @@ exports.register = async (req, res) => {
       const createdAt = new Date();
       const expiresAt = new Date(createdAt.getTime() + Number(ESMS_TIME_ALIVE)*60*1000);
       
+      // Log OTP for development
+      console.log('\n🔐 ==================== SANDBOX OTP (REGISTER) ====================');
+      console.log(`📱 Phone: ${phone}`);
+      console.log(`🔢 OTP Code: ${mockCode}`);
+      console.log(`⏰ Expires at: ${expiresAt.toLocaleString('vi-VN')}`);
+      console.log('=================================================================\n');
+      
       await OtpLog.create({
         phone, 
         smsId: 'SANDBOX-' + Date.now(), 
@@ -295,6 +302,13 @@ exports.login = async (req, res) => {
       const createdAt = new Date();
       const expiresAt = new Date(createdAt.getTime() + Number(ESMS_TIME_ALIVE)*60*1000);
       
+      // Log OTP for development
+      console.log('\n🔐 ==================== SANDBOX OTP (LOGIN) ====================');
+      console.log(`📱 Phone: ${phone}`);
+      console.log(`🔢 OTP Code: ${mockCode}`);
+      console.log(`⏰ Expires at: ${expiresAt.toLocaleString('vi-VN')}`);
+      console.log('===============================================================\n');
+      
       await OtpLog.create({
         phone, 
         smsId: 'SANDBOX-LOGIN-' + Date.now(), 
@@ -360,8 +374,6 @@ exports.login = async (req, res) => {
 // Verify login OTP
 exports.verifyLogin = async (req, res) => {
   try {
-    if (ensureEsmsConfigured(res) !== true) return;
-
     const { phone: phoneRaw, code } = req.body;
     if(!phoneRaw || !code) return res.status(400).json({ error: 'phone and code are required' });
     const phone = normalizePhone(phoneRaw);
@@ -389,6 +401,36 @@ exports.verifyLogin = async (req, res) => {
     if ((lastLog.attempts || 0) >= 5) {
       return res.status(429).json({ ok: false, message: 'too_many_attempts' });
     }
+
+    // SANDBOX MODE: Accept any 4-digit code in development
+    if (process.env.NODE_ENV === 'development' || process.env.ESMS_SANDBOX === 'true') {
+      if (!/^\d{4}$/.test(code)) {
+        lastLog.attempts = (lastLog.attempts || 0) + 1;
+        await lastLog.save();
+        return res.status(400).json({ ok: false, message: 'invalid_code_format' });
+      }
+
+      // Accept any 4-digit code in sandbox
+      lastLog.status = 'verified';
+      await lastLog.save();
+
+      // Generate JWT token
+      const token = generateToken(user);
+
+      return res.json({ 
+        ok: true, 
+        message: 'Login successful (sandbox mode)', 
+        token,
+        user: { 
+          id: user._id,
+          phone: user.phone, 
+          createdAt: user.createdAt 
+        } 
+      });
+    }
+
+    // Production: verify with eSMS
+    if (ensureEsmsConfigured(res) !== true) return;
 
     // Verify OTP via eSMS
     const params = {
