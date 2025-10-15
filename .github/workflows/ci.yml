@@ -9,20 +9,16 @@ on:
 jobs:
   test:
     name: Test & Lint
-    runs-on: ubuntu-latest
-
-    strategy:
-      matrix:
-        node-version: [18.x, 20.x]
+    runs-on: ubuntu-22.04
 
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Setup Node.js ${{ matrix.node-version }}
+    - name: Setup Node.js
       uses: actions/setup-node@v4
       with:
-        node-version: ${{ matrix.node-version }}
+        node-version: '20.x'
         cache: 'npm'
 
     - name: Install dependencies
@@ -41,7 +37,7 @@ jobs:
 
   build:
     name: Build Application
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     needs: test
 
     steps:
@@ -75,7 +71,7 @@ jobs:
 
   code-quality:
     name: Code Quality Check
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
 
     steps:
     - name: Checkout code
@@ -98,9 +94,9 @@ jobs:
 
   docker:
     name: Build & Push Docker Image
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     needs: [test, build]
-    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop' || github.ref == 'refs/heads/feature/ci-cd-pipeline')
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev' || github.ref == 'refs/heads/feature/ci-cd-pipeline')
     
     permissions:
       contents: read
