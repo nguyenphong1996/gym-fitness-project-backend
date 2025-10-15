@@ -27,7 +27,7 @@ Backend API - Xác thực OTP qua SMS, Quản lý User Profile & Delete Account
 docker run -d \
   --name gymxfit-backend \
   -p 3000:3000 \
-  -e MONGO_URI="mongodb+srv://user:pass@cluster.mongodb.net/" \
+  -e MONGO_URI="your_mongodb" \
   -e JWT_SECRET="your-secret-key" \
   -e JWT_EXPIRES_IN="12h" \
   -e ESMS_API_KEY="your-api-key" \
@@ -51,5 +51,5 @@ src/
 └── utils/
     ├── logger.js    # Vietnamese logging (13 functions)
     └── validation.js # Centralized validation utilities
-    
+
 ```
