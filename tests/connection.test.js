@@ -8,11 +8,11 @@ const testMongoConnection = async () => {
   try {
     console.log('🔍 Testing MongoDB connection...');
     
-    if (!process.env.MONGODB_URI) {
-      throw new Error('❌ MONGODB_URI not found in environment variables');
+    if (!process.env.MONGO_URI) {
+      throw new Error('❌ MONGO_URI not found in environment variables');
     }
 
-    await mongoose.connect(process.env.MONGODB_URI);
+    await mongoose.connect(process.env.MONGO_URI);
     console.log('✅ MongoDB connected successfully!');
     console.log(`📊 Database: ${mongoose.connection.db.databaseName}`);
     
