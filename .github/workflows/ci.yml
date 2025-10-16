@@ -2,9 +2,9 @@ name: CI Pipeline
 
 on:
   push:
-    branches: [ main, dev ]
+    branches: [ main, dev, ci/cd ]
   pull_request:
-    branches: [ main, dev ]
+    branches: [ main, dev, ci/cd ]
 
 jobs:
   test:
@@ -23,6 +23,19 @@ jobs:
 
     - name: Install dependencies
       run: npm ci
+
+    - name: Test MongoDB Connection
+      run: npm run test:connection
+      env:
+        MONGODB_URI: ${{ secrets.MONGODB_URI }}
+
+    - name: Test eSMS API
+      run: npm run test:esms
+      continue-on-error: true
+      env:
+        ESMS_API_KEY: ${{ secrets.ESMS_API_KEY }}
+        ESMS_SECRET_KEY: ${{ secrets.ESMS_SECRET_KEY }}
+        ESMS_SANDBOX: ${{ secrets.ESMS_SANDBOX }}
 
     - name: Run linter (if exists)
       run: npm run lint || echo "No lint script found"
@@ -57,9 +70,16 @@ jobs:
       run: npm run build || echo "No build script found"
       continue-on-error: true
 
-    - name: Check application starts
+    - name: Start application in background
+      run: npm start &
+      env:
+        MONGODB_URI: ${{ secrets.MONGODB_URI }}
+        JWT_SECRET: ${{ secrets.JWT_SECRET }}
+        ESMS_API_KEY: ${{ secrets.ESMS_API_KEY }}
+        ESMS_SECRET_KEY: ${{ secrets.ESMS_SECRET_KEY }}
+
+    - name: Wait and check application started
       run: |
-        timeout 10s npm start &
         sleep 5
         if lsof -Pi :3000 -sTCP:LISTEN -t >/dev/null ; then
           echo "✅ Server started successfully on port 3000"
@@ -96,7 +116,7 @@ jobs:
     name: Build & Push Docker Image
     runs-on: ubuntu-22.04
     needs: [test, build]
-    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev' || github.ref == 'refs/heads/feature/ci-cd-pipeline')
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev' || github.ref == 'refs/heads/ci/cd')
     
     permissions:
       contents: read
