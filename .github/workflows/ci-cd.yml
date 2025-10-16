@@ -1,4 +1,4 @@
-name: CI Pipeline
+name: CI/CD Pipeline
 
 on:
   push:
@@ -152,3 +152,40 @@ jobs:
     - name: Image pushed
       run: |
         echo "Image pushed: ${{ secrets.DOCKERHUB_USERNAME }}/gymxfit:be and ${{ secrets.DOCKERHUB_USERNAME }}/gymxfit:be-${{ github.sha }}"
+
+  deploy:
+    name: Deploy to Server
+    runs-on: ubuntu-22.04
+    needs: [test, build, docker]
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev' || github.ref == 'refs/heads/ci/cd')
+    
+    steps:
+    - name: Deploy via SSH
+      uses: appleboy/ssh-action@v1.0.0
+      with:
+        host: ${{ secrets.SERVER_HOST }}
+        username: ${{ secrets.SERVER_USER }}
+        key: ${{ secrets.SSH_PRIVATE_KEY }}
+        port: 22
+        script: |
+          echo "🚀 Starting deployment..."
+          echo "📌 Branch: ${{ github.ref_name }}"
+          echo "📂 Navigating to ~/gymxfit"
+          cd ~/gymxfit
+          
+          echo "🛑 Stopping running containers..."
+          docker compose down
+          
+          echo "📥 Pulling latest Docker images..."
+          docker compose pull
+          
+          echo "▶️  Starting containers with new images..."
+          docker compose up -d
+          
+          echo "✅ Deployment completed successfully!"
+          echo "📊 Running containers:"
+          docker compose ps
+          
+          echo "🔍 Checking container health..."
+          sleep 5
+          docker compose ps | grep "Up" && echo "✅ All containers are running!" || echo "⚠️ Some containers may have issues"
