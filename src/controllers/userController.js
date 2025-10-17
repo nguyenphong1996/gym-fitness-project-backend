@@ -1,16 +1,13 @@
+
 // controllers/userController.js
+const fs = require('fs').promises;
 const User = require('../models/User');
 const { OtpServiceError } = require('../services/otpService');
 const otpService = require('../services/otpService');
+const { uploadImage, deleteResource } = require('../utils/cloudinary');
 const { validateProfileUpdate, validateOtp } = require('../utils/validation');
 const { logError, logSuccess, logWarning, logDebug, logUserAction } = require('../utils/logger');
 
-/**
- * Handles OtpServiceError and sends an appropriate HTTP response.
- * @param {object} res - The Express response object.
- * @param {OtpServiceError} err - The error thrown by the OTP service.
- * @param {string} context - The controller function name for logging.
- */
 function handleOtpError(res, err, context, phone) {
   logWarning(context, err.message, { code: err.code, phone });
   return res.status(err.statusCode).json({ 
@@ -19,17 +16,11 @@ function handleOtpError(res, err, context, phone) {
   });
 }
 
-/**
- * Get current user profile
- */
 exports.getProfile = async (req, res) => {
   const context = 'userController.getProfile';
   try {
-    logDebug(context, `Lấy profile cho user: ${req.user.id}`);
     const user = await User.findById(req.user.id).lean();
-
     if (!user) {
-      logWarning(context, `Không tìm thấy user: ${req.user.id}`);
       return res.status(404).json({ error: 'user_not_found', message: 'User not found' });
     }
 
@@ -38,7 +29,7 @@ exports.getProfile = async (req, res) => {
       phone: user.phone,
       name: user.name || null,
       email: user.email || null,
-      avatarUrl: user.avatarUrl || null,
+      avatar: user.avatar?.url || null, // Updated to use new avatar structure
       gender: user.gender || null,
       dob: user.dob || null,
       weight: user.weight || null,
@@ -56,18 +47,20 @@ exports.getProfile = async (req, res) => {
   }
 };
 
-/**
- * Update user profile
- */
 exports.updateProfile = async (req, res) => {
   const context = 'userController.updateProfile';
   try {
-    logDebug(context, `Cập nhật profile cho user: ${req.user.id}`, { updates: req.body });
+    // The 'avatar' field is now managed by updateAvatar and cannot be set here.
+    if (req.body.avatar || req.body.avatarUrl) {
+      return res.status(400).json({
+        error: 'invalid_field',
+        message: 'Avatar can only be updated via the /api/user/avatar endpoint.'
+      });
+    }
 
     const validation = validateProfileUpdate(req.body);
     if (!validation.valid) {
       const firstError = Object.values(validation.errors)[0];
-      logWarning(context, 'Validation thất bại', { field: Object.keys(validation.errors)[0], error: firstError });
       return res.status(400).json({ error: firstError.error, message: firstError.message });
     }
 
@@ -75,8 +68,7 @@ exports.updateProfile = async (req, res) => {
       return res.status(400).json({ error: 'no_updates', message: 'No valid fields provided for update' });
     }
 
-    const user = await User.findByIdAndUpdate(req.user.id, validation.data, { new: true, runValidators: true });
-
+    const user = await User.findByIdAndUpdate(req.user.id, validation.data, { new: true });
     if (!user) {
       return res.status(404).json({ error: 'user_not_found', message: 'User not found' });
     }
@@ -84,11 +76,7 @@ exports.updateProfile = async (req, res) => {
     logSuccess(context, `Cập nhật profile thành công: ${user.phone}`, { updatedFields: Object.keys(validation.data) });
     logUserAction(user._id, 'Cập nhật profile', { fields: Object.keys(validation.data) });
 
-    return res.json({ 
-      ok: true, 
-      message: 'Profile updated successfully', 
-      user: { /* return updated fields */ }
-    });
+    return res.json({ ok: true, message: 'Profile updated successfully' });
 
   } catch (err) {
     logError(context, 'Lỗi khi cập nhật profile', err);
@@ -96,9 +84,54 @@ exports.updateProfile = async (req, res) => {
   }
 };
 
-/**
- * Step 1: Request to delete a user account by sending an OTP.
- */
+exports.updateAvatar = async (req, res) => {
+  const context = 'userController.updateAvatar';
+  const tempPath = req.file?.path;
+
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'file_missing', message: 'No image file provided.' });
+    }
+
+    const user = await User.findById(req.user.id);
+    if (!user) {
+      return res.status(404).json({ error: 'user_not_found', message: 'User not found.' });
+    }
+
+    // Upload new avatar to Cloudinary
+    const { url, cloudinary_id } = await uploadImage(tempPath);
+
+    // If user had an old avatar, delete it from Cloudinary
+    const oldCloudinaryId = user.avatar?.cloudinary_id;
+    if (oldCloudinaryId) {
+      await deleteResource(oldCloudinaryId, 'image');
+    }
+
+    // Update user document with new avatar info
+    user.avatar = { url, cloudinary_id };
+    await user.save();
+
+    logUserAction(user._id, 'Cập nhật avatar', { new_id: cloudinary_id });
+    logSuccess(context, `Cập nhật avatar thành công cho ${user.phone}`);
+
+    return res.json({ 
+      ok: true, 
+      message: 'Avatar updated successfully', 
+      avatar: url 
+    });
+
+  } catch (err) {
+    logError(context, 'Lỗi khi cập nhật avatar', err);
+    return res.status(500).json({ error: 'server_error', message: 'Failed to update avatar.' });
+
+  } finally {
+    // Clean up the temporary file
+    if (tempPath) {
+      await fs.unlink(tempPath).catch(err => logWarning(context, `Không thể xóa file tạm: ${tempPath}`, err));
+    }
+  }
+};
+
 exports.requestDeleteAccount = async (req, res) => {
   const context = 'userController.requestDeleteAccount';
   let phone;
@@ -123,9 +156,6 @@ exports.requestDeleteAccount = async (req, res) => {
   }
 };
 
-/**
- * Step 2: Confirm account deletion with OTP.
- */
 exports.confirmDeleteAccount = async (req, res) => {
   const context = 'userController.confirmDeleteAccount';
   let user;
@@ -148,11 +178,15 @@ exports.confirmDeleteAccount = async (req, res) => {
     if (isVerified) {
       const userId = user._id;
       const userPhone = user.phone;
+      const avatarCloudinaryId = user.avatar?.cloudinary_id;
 
-      // Permanently delete the user
+      // Delete avatar from cloudinary before deleting user
+      if (avatarCloudinaryId) {
+        await deleteResource(avatarCloudinaryId, 'image');
+      }
+
       await User.findByIdAndDelete(userId);
       
-      // Optional: Clean up all OTP logs for this user
       const OtpLog = require('../models/OtpLog');
       await OtpLog.deleteMany({ phone: userPhone });
 
