@@ -5,9 +5,10 @@
   "scripts": {
     "start": "node ./bin/www",
     "dev": "nodemon ./bin/www",
-    "test": "node tests/connection.test.js && node tests/esms.test.js",
+    "test": "node tests/connection.test.js && node tests/esms.test.js && node tests/cloudinary.test.js",
     "test:connection": "node tests/connection.test.js",
     "test:esms": "node tests/esms.test.js",
+    "test:cloudinary": "node tests/cloudinary.test.js",
     "test:startup": "node tests/startup.test.js"
   },
   "dependencies": {
