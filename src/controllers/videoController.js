@@ -1,7 +1,7 @@
 const fs = require('fs').promises;
 const Video = require('../models/Video');
 const { uploadVideo, getThumbnailUrl, getStreamingUrl, deleteVideo } = require('../utils/cloudinary');
-const { logError, logSuccess, logInfo } = require('../utils/logger');
+const { logError, logSuccess, logInfo, logVideoUpload } = require('../utils/logger');
 
 const uploadVideoFile = async (req, res) => {
   let filePath = null;
@@ -18,7 +18,20 @@ const uploadVideoFile = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Title, duration, calories required' });
     }
 
-    logInfo(`📤 Uploading video: ${title}`);
+    // 📤 Log: Bắt đầu upload
+    logVideoUpload('pending', {
+      fileName: req.file.originalname,
+      fileSize: req.file.size,
+      title,
+      duration: parseInt(duration),
+      category: category || 'workout'
+    });
+
+    // � Log: Đang xử lý
+    logVideoUpload('processing', {
+      title,
+      category: category || 'workout'
+    });
 
     const uploadResult = await uploadVideo(filePath);
 
@@ -32,7 +45,15 @@ const uploadVideoFile = async (req, res) => {
     });
 
     await video.save();
-    logSuccess(`✅ Video saved: ${video._id}`);
+
+    // ✅ Log: Upload thành công
+    logVideoUpload('completed', {
+      title: video.title,
+      duration: video.duration,
+      category: video.category,
+      cloudinary_id: video.cloudinary_id,
+      url: video.url
+    });
 
     // Xóa file tạm sau upload thành công
     await fs.unlink(filePath).catch(() => {});
@@ -49,6 +70,12 @@ const uploadVideoFile = async (req, res) => {
       }
     });
   } catch (error) {
+    // ❌ Log: Upload lỗi
+    logVideoUpload('failed', {
+      fileName: req.file?.originalname,
+      error: error.message
+    });
+    
     // Xóa file tạm nếu lỗi
     if (filePath) {
       await fs.unlink(filePath).catch(() => {});
@@ -108,7 +135,11 @@ const getVideoById = async (req, res) => {
     video.views += 1;
     await video.save();
 
-    logInfo(`👁️  Video ${video._id} viewed (${video.views} views)`);
+    // 👁️ Log: Views tracking
+    logVideoUpload('completed', {
+      title: video.title,
+      views: video.views
+    });
 
     res.json({
       success: true,

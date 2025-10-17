@@ -227,3 +227,123 @@ exports.logUserAction = (userId, action, details = null) => {
   
   console.log(''); // Empty line
 };
+
+/**
+ * Log video upload status (Tiếng Việt)
+ */
+exports.logVideoUpload = (status, data = {}) => {
+  const statusEmoji = {
+    pending: '⏳',
+    processing: '🔄',
+    completed: '✅',
+    failed: '❌'
+  };
+  
+  const statusColor = {
+    pending: colors.yellow,
+    processing: colors.cyan,
+    completed: colors.green,
+    failed: colors.red
+  };
+  
+  const icon = statusEmoji[status] || '📹';
+  const color = statusColor[status] || colors.cyan;
+  
+  console.log(`\n${color}${icon} [VIDEO UPLOAD - ${status.toUpperCase()}] ${timestamp()}${colors.reset}`);
+  
+  if (data.fileName) {
+    console.log(`${colors.bright}📄 Tên file:${colors.reset} ${data.fileName}`);
+  }
+  
+  if (data.fileSize) {
+    const sizeMB = (data.fileSize / (1024 * 1024)).toFixed(2);
+    console.log(`${colors.bright}📊 Kích thước:${colors.reset} ${sizeMB} MB`);
+  }
+  
+  if (data.title) {
+    console.log(`${colors.bright}🎬 Tiêu đề:${colors.reset} ${data.title}`);
+  }
+  
+  if (data.duration) {
+    const mins = Math.floor(data.duration / 60);
+    const secs = data.duration % 60;
+    console.log(`${colors.bright}⏱️  Thời lượng:${colors.reset} ${mins}m ${secs}s`);
+  }
+  
+  if (data.category) {
+    console.log(`${colors.bright}🏷️  Loại video:${colors.reset} ${data.category}`);
+  }
+  
+  if (data.cloudinary_id) {
+    console.log(`${colors.bright}☁️  Cloudinary ID:${colors.reset} ${data.cloudinary_id}`);
+  }
+  
+  if (data.url) {
+    console.log(`${colors.bright}🔗 URL:${colors.reset} ${data.url}`);
+  }
+  
+  if (data.error) {
+    console.log(`${colors.bright}❌ Lỗi:${colors.reset} ${data.error}`);
+  }
+  
+  if (data.views !== undefined) {
+    console.log(`${colors.bright}👁️  Lượt xem:${colors.reset} ${data.views}`);
+  }
+  
+  console.log(''); // Empty line
+};
+
+/**
+ * Log avatar upload status (Tiếng Việt)
+ */
+exports.logAvatarUpload = (status, data = {}) => {
+  const statusEmoji = {
+    pending: '⏳',
+    processing: '🔄',
+    completed: '✅',
+    failed: '❌'
+  };
+  
+  const statusColor = {
+    pending: colors.yellow,
+    processing: colors.cyan,
+    completed: colors.green,
+    failed: colors.red
+  };
+  
+  const icon = statusEmoji[status] || '🖼️';
+  const color = statusColor[status] || colors.cyan;
+  
+  console.log(`\n${color}${icon} [AVATAR UPLOAD - ${status.toUpperCase()}] ${timestamp()}${colors.reset}`);
+  
+  if (data.phone) {
+    console.log(`${colors.bright}📱 Số điện thoại:${colors.reset} ${data.phone}`);
+  }
+  
+  if (data.fileName) {
+    console.log(`${colors.bright}📄 Tên file:${colors.reset} ${data.fileName}`);
+  }
+  
+  if (data.fileSize) {
+    const sizeKB = (data.fileSize / 1024).toFixed(2);
+    console.log(`${colors.bright}📊 Kích thước:${colors.reset} ${sizeKB} KB`);
+  }
+  
+  if (data.oldCloudinaryId) {
+    console.log(`${colors.bright}🗑️  Avatar cũ (xóa):${colors.reset} ${data.oldCloudinaryId}`);
+  }
+  
+  if (data.cloudinary_id) {
+    console.log(`${colors.bright}☁️  Cloudinary ID:${colors.reset} ${data.cloudinary_id}`);
+  }
+  
+  if (data.url) {
+    console.log(`${colors.bright}🔗 URL:${colors.reset} ${data.url}`);
+  }
+  
+  if (data.error) {
+    console.log(`${colors.bright}❌ Lỗi:${colors.reset} ${data.error}`);
+  }
+  
+  console.log(''); // Empty line
+};
