@@ -9,9 +9,9 @@ require('dotenv').config();
 
 var indexRouter = require('./routes/index');
 var usersRouter = require('./routes/users');
-var otpRouter = require('./src/routes/otp');
 var authRouter = require('./src/routes/auth');
 var userRouter = require('./src/routes/user');
+var videoRouter = require('./src/routes/video');
 
 var app = express();
 connectDB();
@@ -27,9 +27,9 @@ app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
 app.use('/', indexRouter);
 app.use('/users', usersRouter);
-app.use('/otp', otpRouter);
 app.use('/api/auth', authRouter);
 app.use('/api/user', userRouter);
+app.use('/api/videos', videoRouter);
 
 module.exports = app;
 
