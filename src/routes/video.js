@@ -60,6 +60,7 @@ const upload = multer({
  *       - Định dạng: MP4, MOV, WEBM
  *       - Kích thước: Tối đa 100MB
  *       - Sẽ tự động trích thumbnail tại giây thứ 3
+ *       - Thời lượng video tự động lấy từ file
  *     requestBody:
  *       required: true
  *       content:
@@ -69,7 +70,6 @@ const upload = multer({
  *             required:
  *               - video
  *               - title
- *               - duration
  *               - estimated_calories
  *             properties:
  *               video:
@@ -80,10 +80,6 @@ const upload = multer({
  *                 type: string
  *                 example: "Full Body HIIT Workout - 30 minutes"
  *                 description: Tên video
- *               duration:
- *                 type: number
- *                 example: 1800
- *                 description: Thời lượng video (giây)
  *               estimated_calories:
  *                 type: number
  *                 example: 350
@@ -139,7 +135,7 @@ const upload = multer({
  *                   type: string
  *                   enum:
  *                     - "Video file required"
- *                     - "Title, duration, calories required"
+ *                     - "Title and estimated calories required"
  *                     - "Only video files allowed (MP4, MOV, WEBM)"
  *       401:
  *         description: Không có authorization hoặc token không hợp lệ

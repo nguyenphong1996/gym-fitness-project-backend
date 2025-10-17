@@ -11,11 +11,11 @@ const uploadVideoFile = async (req, res) => {
     }
 
     filePath = req.file.path;
-    const { title, duration, estimated_calories, category } = req.body;
+    const { title, estimated_calories, category } = req.body;
     
-    if (!title || !duration || !estimated_calories) {
+    if (!title || !estimated_calories) {
       await fs.unlink(filePath).catch(() => {});
-      return res.status(400).json({ success: false, message: 'Title, duration, calories required' });
+      return res.status(400).json({ success: false, message: 'Title and estimated calories required' });
     }
 
     // 📤 Log: Bắt đầu upload
@@ -23,7 +23,6 @@ const uploadVideoFile = async (req, res) => {
       fileName: req.file.originalname,
       fileSize: req.file.size,
       title,
-      duration: parseInt(duration),
       category: category || 'workout'
     });
 
@@ -37,7 +36,7 @@ const uploadVideoFile = async (req, res) => {
 
     const video = new Video({
       title,
-      duration: parseInt(duration),
+      duration: uploadResult.duration,
       estimated_calories: parseInt(estimated_calories),
       category: category || 'workout',
       cloudinary_id: uploadResult.cloudinary_id,
