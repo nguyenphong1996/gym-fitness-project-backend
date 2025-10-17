@@ -6,7 +6,7 @@ const { OtpServiceError } = require('../services/otpService');
 const otpService = require('../services/otpService');
 const { uploadImage, deleteResource } = require('../utils/cloudinary');
 const { validateProfileUpdate, validateOtp } = require('../utils/validation');
-const { logError, logSuccess, logWarning, logDebug, logUserAction } = require('../utils/logger');
+const { logError, logSuccess, logWarning, logDebug, logUserAction, logAvatarUpload } = require('../utils/logger');
 
 function handleOtpError(res, err, context, phone) {
   logWarning(context, err.message, { code: err.code, phone });
@@ -98,6 +98,18 @@ exports.updateAvatar = async (req, res) => {
       return res.status(404).json({ error: 'user_not_found', message: 'User not found.' });
     }
 
+    // ⏳ Log: Bắt đầu upload avatar
+    logAvatarUpload('pending', {
+      phone: user.phone,
+      fileName: req.file.originalname,
+      fileSize: req.file.size
+    });
+
+    // 🔄 Log: Đang xử lý
+    logAvatarUpload('processing', {
+      phone: user.phone
+    });
+
     // Upload new avatar to Cloudinary
     const { url, cloudinary_id } = await uploadImage(tempPath);
 
@@ -111,8 +123,15 @@ exports.updateAvatar = async (req, res) => {
     user.avatar = { url, cloudinary_id };
     await user.save();
 
+    // ✅ Log: Upload avatar thành công
+    logAvatarUpload('completed', {
+      phone: user.phone,
+      cloudinary_id: cloudinary_id,
+      url: url,
+      oldCloudinaryId: oldCloudinaryId
+    });
+
     logUserAction(user._id, 'Cập nhật avatar', { new_id: cloudinary_id });
-    logSuccess(context, `Cập nhật avatar thành công cho ${user.phone}`);
 
     return res.json({ 
       ok: true, 
@@ -121,6 +140,13 @@ exports.updateAvatar = async (req, res) => {
     });
 
   } catch (err) {
+    // ❌ Log: Upload avatar lỗi
+    logAvatarUpload('failed', {
+      phone: req.user?.phone,
+      fileName: req.file?.originalname,
+      error: err.message
+    });
+
     logError(context, 'Lỗi khi cập nhật avatar', err);
     return res.status(500).json({ error: 'server_error', message: 'Failed to update avatar.' });
 
