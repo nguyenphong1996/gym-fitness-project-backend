@@ -1,29 +1,38 @@
 // controllers/userController.js
+const User = require('../models/User');
+const { OtpServiceError } = require('../services/otpService');
+const otpService = require('../services/otpService');
 const { validateProfileUpdate, validateOtp } = require('../utils/validation');
-const { logError, logSuccess, logWarning, logDebug, logUserAction, logOTP, logInfo, logRateLimit } = require('../utils/logger');
+const { logError, logSuccess, logWarning, logDebug, logUserAction } = require('../utils/logger');
+
+/**
+ * Handles OtpServiceError and sends an appropriate HTTP response.
+ * @param {object} res - The Express response object.
+ * @param {OtpServiceError} err - The error thrown by the OTP service.
+ * @param {string} context - The controller function name for logging.
+ */
+function handleOtpError(res, err, context, phone) {
+  logWarning(context, err.message, { code: err.code, phone });
+  return res.status(err.statusCode).json({ 
+    error: err.code,
+    message: err.message 
+  });
+}
 
 /**
  * Get current user profile
- * Protected route - requires JWT token
- * GET /api/user/profile
  */
 exports.getProfile = async (req, res) => {
+  const context = 'userController.getProfile';
   try {
-    const User = require('../models/User');
-    
-    logDebug('userController.getProfile', `Lấy profile cho user: ${req.user.id}`);
-    
+    logDebug(context, `Lấy profile cho user: ${req.user.id}`);
     const user = await User.findById(req.user.id).lean();
-    
+
     if (!user) {
-      logWarning('userController.getProfile', `Không tìm thấy user: ${req.user.id}`);
-      return res.status(404).json({ 
-        error: 'user_not_found',
-        message: 'User not found' 
-      });
+      logWarning(context, `Không tìm thấy user: ${req.user.id}`);
+      return res.status(404).json({ error: 'user_not_found', message: 'User not found' });
     }
 
-    // Return only safe fields
     const profile = {
       id: user._id,
       phone: user.phone,
@@ -38,421 +47,128 @@ exports.getProfile = async (req, res) => {
       createdAt: user.createdAt
     };
 
-    logSuccess('userController.getProfile', `Lấy profile thành công: ${user.phone}`);
+    logSuccess(context, `Lấy profile thành công: ${user.phone}`);
     return res.json({ ok: true, user: profile });
-    
+
   } catch (err) {
-    logError('userController.getProfile', 'Lỗi khi lấy profile', err);
-    return res.status(500).json({ 
-      error: 'server_error',
-      message: 'Failed to get profile' 
-    });
+    logError(context, 'Lỗi khi lấy profile', err);
+    return res.status(500).json({ error: 'server_error', message: 'Failed to get profile' });
   }
 };
 
 /**
  * Update user profile
- * Protected route - requires JWT token
- * PUT /api/user/profile
- * Can update any field independently - all fields optional
  */
 exports.updateProfile = async (req, res) => {
+  const context = 'userController.updateProfile';
   try {
-    const User = require('../models/User');
-    
-    logDebug('userController.updateProfile', `Cập nhật profile cho user: ${req.user.id}`, { updates: req.body });
-    
-    // Validate all fields using centralized validation
+    logDebug(context, `Cập nhật profile cho user: ${req.user.id}`, { updates: req.body });
+
     const validation = validateProfileUpdate(req.body);
-    
-    // If validation failed, return first error
     if (!validation.valid) {
       const firstError = Object.values(validation.errors)[0];
-      logWarning('userController.updateProfile', 'Validation thất bại', { 
-        field: Object.keys(validation.errors)[0],
-        error: firstError 
-      });
-      return res.status(400).json({
-        error: firstError.error,
-        message: firstError.message
-      });
-    }
-    
-    // Check if at least one field is being updated
-    if (Object.keys(validation.data).length === 0) {
-      logWarning('userController.updateProfile', 'Không có field nào để cập nhật');
-      return res.status(400).json({ 
-        error: 'no_updates', 
-        message: 'No valid fields provided for update' 
-      });
-    }
-    
-    logInfo('userController.updateProfile', `Cập nhật ${Object.keys(validation.data).length} fields`, { 
-      fields: Object.keys(validation.data) 
-    });
-    
-    // Update user with validated data
-    const user = await User.findByIdAndUpdate(
-      req.user.id,
-      validation.data,
-      { new: true, runValidators: true }
-    );
-    
-    if (!user) {
-      logWarning('userController.updateProfile', `Không tìm thấy user: ${req.user.id}`);
-      return res.status(404).json({ 
-        error: 'user_not_found',
-        message: 'User not found' 
-      });
+      logWarning(context, 'Validation thất bại', { field: Object.keys(validation.errors)[0], error: firstError });
+      return res.status(400).json({ error: firstError.error, message: firstError.message });
     }
 
-    logSuccess('userController.updateProfile', `Cập nhật profile thành công: ${user.phone}`, {
-      userId: user._id,
-      updatedFields: Object.keys(validation.data)
-    });
-    
+    if (Object.keys(validation.data).length === 0) {
+      return res.status(400).json({ error: 'no_updates', message: 'No valid fields provided for update' });
+    }
+
+    const user = await User.findByIdAndUpdate(req.user.id, validation.data, { new: true, runValidators: true });
+
+    if (!user) {
+      return res.status(404).json({ error: 'user_not_found', message: 'User not found' });
+    }
+
+    logSuccess(context, `Cập nhật profile thành công: ${user.phone}`, { updatedFields: Object.keys(validation.data) });
     logUserAction(user._id, 'Cập nhật profile', { fields: Object.keys(validation.data) });
 
     return res.json({ 
       ok: true, 
       message: 'Profile updated successfully', 
-      user: {
-        id: user._id,
-        phone: user.phone,
-        name: user.name,
-        email: user.email,
-        avatarUrl: user.avatarUrl,
-        gender: user.gender,
-        dob: user.dob,
-        weight: user.weight,
-        height: user.height,
-        updatedAt: user.updatedAt
-      }
+      user: { /* return updated fields */ }
     });
-    
+
   } catch (err) {
-    logError('userController.updateProfile', 'Lỗi khi cập nhật profile', err);
-    return res.status(500).json({ 
-      error: 'server_error',
-      message: 'Failed to update profile' 
-    });
+    logError(context, 'Lỗi khi cập nhật profile', err);
+    return res.status(500).json({ error: 'server_error', message: 'Failed to update profile' });
   }
 };
 
 /**
- * Delete user account (PERMANENT)
- * Protected route - requires JWT token
- * Requires OTP verification for security
- * 
- * Steps:
- * 1. User requests deletion → sends OTP to phone
- * 2. User confirms with OTP → account deleted permanently
+ * Step 1: Request to delete a user account by sending an OTP.
  */
 exports.requestDeleteAccount = async (req, res) => {
+  const context = 'userController.requestDeleteAccount';
+  let phone;
   try {
-    const User = require('../models/User');
-    const OtpLog = require('../models/OtpLog');
-    const axios = require('axios');
-
     const user = await User.findById(req.user.id);
     if (!user) {
-      logWarning('userController.requestDeleteAccount', `Không tìm thấy user: ${req.user.id}`);
-      return res.status(404).json({ 
-        error: 'user_not_found', 
-        message: 'User not found' 
-      });
+      return res.status(404).json({ error: 'user_not_found', message: 'User not found' });
     }
+    phone = user.phone;
 
-    const phone = user.phone;
-    logWarning('userController.requestDeleteAccount', `⚠️ Yêu cầu XÓA TÀI KHOẢN từ: ${phone}`);
-
-    // Check rate limiting
-    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
-    const recentOtps = await OtpLog.countDocuments({
-      phone,
-      type: 'delete_account',
-      createdAt: { $gte: oneHourAgo }
-    });
-
-    const maxOtpsPerHour = parseInt(process.env.MAX_OTPS_PER_HOUR) || 10;
-    if (recentOtps >= maxOtpsPerHour) {
-      logRateLimit(phone, '/api/user/account/delete/request', maxOtpsPerHour - recentOtps);
-      return res.status(429).json({ 
-        error: 'rate_limit_exceeded', 
-        message: `Too many OTP requests. Max ${maxOtpsPerHour} per hour.` 
-      });
-    }
-
-    // Check cooldown
-    const cooldownSeconds = parseInt(process.env.RESEND_COOLDOWN_SECONDS) || 60;
-    const cooldownAgo = new Date(Date.now() - cooldownSeconds * 1000);
-    const recentOtp = await OtpLog.findOne({
-      phone,
-      type: 'delete_account',
-      createdAt: { $gte: cooldownAgo }
-    });
-
-    if (recentOtp) {
-      const waitTime = Math.ceil((cooldownSeconds * 1000 - (Date.now() - recentOtp.createdAt.getTime())) / 1000);
-      logWarning('userController.requestDeleteAccount', `Cooldown chưa hết: ${phone} (còn ${waitTime}s)`);
-      return res.status(429).json({ 
-        error: 'cooldown_active', 
-        message: `Please wait ${waitTime} seconds before requesting another OTP.` 
-      });
-    }
-
-    // Sandbox mode
-    if (process.env.NODE_ENV === 'development' || process.env.ESMS_SANDBOX === 'true') {
-      const mockCode = Math.floor(1000 + Math.random() * 9000).toString();
-      const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
-
-      await OtpLog.create({
-        phone,
-        type: 'delete_account',
-        sessionId: 'sandbox-delete-' + Date.now(),
-        expiresAt,
-        status: 'pending'
-      });
-
-      logOTP('Gửi OTP xóa tài khoản (Sandbox)', phone, mockCode, expiresAt);
-
-      return res.json({
-        ok: true,
-        message: 'OTP sent to your phone (sandbox mode)',
-        dev_otp: mockCode,
-        expiresIn: 600
-      });
-    }
-
-    // Production: Send real OTP via eSMS
-    const apiKey = process.env.ESMS_API_KEY;
-    const secretKey = process.env.ESMS_SECRET_KEY;
-    const brandName = process.env.ESMS_BRANDNAME || 'Baotrixemay';
-
-    if (!apiKey || !secretKey) {
-      logError('userController.requestDeleteAccount', 'Cấu hình eSMS chưa đầy đủ');
-      return res.status(500).json({ 
-        error: 'esms_config_missing', 
-        message: 'eSMS not configured' 
-      });
-    }
-
-    logInfo('userController.requestDeleteAccount', `Gửi OTP xóa tài khoản qua eSMS cho: ${phone}`);
-
-    const sendUrl = 'https://rest.esms.vn/MainService.svc/json/SendMessageAutoGenCode_V4_get';
-    const response = await axios.get(sendUrl, {
-      params: {
-        ApiKey: apiKey,
-        SecretKey: secretKey,
-        Phone: phone,
-        Content: `Ma xac nhan xoa tai khoan cua ban`,
-        Brandname: brandName,
-        SmsType: 8
-      }
-    });
-
-    if (response.data.CodeResult !== '100') {
-      logError('userController.requestDeleteAccount', 'eSMS API trả về lỗi', response.data);
-      return res.status(500).json({ 
-        error: 'sms_send_failed', 
-        message: 'Failed to send OTP' 
-      });
-    }
-
-    const sessionId = response.data.SMSID;
-    const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
-
-    await OtpLog.create({
-      phone,
-      type: 'delete_account',
-      sessionId,
-      expiresAt,
-      status: 'pending'
-    });
-
-    logSuccess('userController.requestDeleteAccount', `Gửi OTP xóa tài khoản thành công: ${phone}`, { sessionId });
-
-    return res.json({
-      ok: true,
-      message: 'OTP sent to your phone to confirm account deletion',
-      sessionId,
-      expiresIn: 600
-    });
+    logWarning(context, `⚠️ Yêu cầu XÓA TÀI KHOẢN từ: ${phone}`);
+    const result = await otpService.requestOtp(phone, 'delete_account', req.ip);
+    
+    return res.json(result);
 
   } catch (err) {
-    logError('userController.requestDeleteAccount', 'Lỗi không xác định khi gửi OTP xóa tài khoản', err);
-    return res.status(500).json({ 
-      error: 'server_error',
-      message: 'Failed to request account deletion' 
-    });
+    if (err instanceof OtpServiceError) {
+      return handleOtpError(res, err, context, phone);
+    }
+    logError(context, 'Lỗi không xác định khi gửi OTP xóa tài khoản', err);
+    return res.status(500).json({ error: 'server_error', message: 'Failed to request account deletion' });
   }
 };
 
 /**
- * Confirm delete account with OTP
- * Protected route - requires JWT token
- * PERMANENTLY deletes user account and all related data
+ * Step 2: Confirm account deletion with OTP.
  */
 exports.confirmDeleteAccount = async (req, res) => {
+  const context = 'userController.confirmDeleteAccount';
+  let user;
   try {
-    const User = require('../models/User');
-    const OtpLog = require('../models/OtpLog');
-    const axios = require('axios');
-
-    logDebug('userController.confirmDeleteAccount', `Xác nhận xóa tài khoản: ${req.user.id}`);
-
-    // Validate OTP (accept both 'code' and 'otp' field names)
-    const otpValidation = validateOtp(req.body.otp || req.body.code);
+    const otpValidation = validateOtp(req.body.code);
     if (!otpValidation.valid) {
-      logWarning('userController.confirmDeleteAccount', `OTP không hợp lệ: ${req.body.otp || req.body.code}`);
-      return res.status(400).json({ 
-        error: otpValidation.error,
-        message: otpValidation.message 
-      });
+      return res.status(400).json({ error: otpValidation.error, message: otpValidation.message });
     }
-
     const otp = otpValidation.otp;
 
-    const user = await User.findById(req.user.id);
+    user = await User.findById(req.user.id);
     if (!user) {
-      return res.status(404).json({ 
-        error: 'not_found', 
-        message: 'User not found' 
-      });
+      return res.status(404).json({ error: 'user_not_found', message: 'User not found' });
     }
 
-    const phone = user.phone;
+    logWarning(context, `⚠️ ĐỌC XÁC NHẬN XÓA TÀI KHOẢN từ: ${user.phone}`);
 
-    logWarning('userController.confirmDeleteAccount', `⚠️ ĐỌC XÁC NHẬN XÓA TÀI KHOẢN từ: ${phone}`);
+    const isVerified = await otpService.verifyOtp(user.phone, otp, 'delete_account');
 
-    // Find latest pending OTP
-    const lastLog = await OtpLog.findOne({ 
-      phone, 
-      type: 'delete_account',
-      status: 'pending' 
-    }).sort({ createdAt: -1 });
+    if (isVerified) {
+      const userId = user._id;
+      const userPhone = user.phone;
 
-    if (!lastLog) {
-      logWarning('userController.confirmDeleteAccount', `Không tìm thấy OTP request cho: ${phone}`);
-      return res.status(400).json({ 
-        error: 'no_otp_request', 
-        message: 'No OTP request found. Please request OTP first.' 
-      });
+      // Permanently delete the user
+      await User.findByIdAndDelete(userId);
+      
+      // Optional: Clean up all OTP logs for this user
+      const OtpLog = require('../models/OtpLog');
+      await OtpLog.deleteMany({ phone: userPhone });
+
+      logWarning(context, `🗑️ XÓA VĨNH VIỄN TÀI KHOẢN: ${userPhone} | User ID: ${userId}`);
+      logUserAction(userId, 'XÓA TÀI KHOẢN VĨNH VIỄN', { phone: userPhone });
+
+      return res.json({ ok: true, message: 'Account deleted successfully' });
     }
 
-    // Check expiration
-    if (new Date() > lastLog.expiresAt) {
-      lastLog.status = 'expired';
-      await lastLog.save();
-      logWarning('userController.confirmDeleteAccount', `OTP đã hết hạn cho: ${phone}`);
-      return res.status(400).json({ 
-        error: 'otp_expired', 
-        message: 'OTP has expired. Please request a new one.' 
-      });
-    }
-
-    // Check max attempts
-    if (lastLog.attempts >= 5) {
-      lastLog.status = 'failed';
-      await lastLog.save();
-      logWarning('userController.confirmDeleteAccount', `Vượt quá số lần thử cho: ${phone}`);
-      return res.status(400).json({ 
-        error: 'max_attempts_exceeded', 
-        message: 'Maximum verification attempts exceeded.' 
-      });
-    }
-
-    // Sandbox mode - accept any 4-digit code
-    if (process.env.NODE_ENV === 'development' || process.env.ESMS_SANDBOX === 'true') {
-      if (!/^\d{4}$/.test(otp)) {
-        lastLog.attempts = (lastLog.attempts || 0) + 1;
-        await lastLog.save();
-        logWarning('userController.confirmDeleteAccount', `OTP không đúng format: ${otp}`);
-        return res.status(400).json({ 
-          error: 'invalid_otp_format', 
-          message: 'OTP must be 4 digits' 
-        });
-      }
-
-      // Mark OTP as verified
-      lastLog.status = 'verified';
-      await lastLog.save();
-
-      logWarning('userController.confirmDeleteAccount', `🗑️ XÓA VĨNH VIỄN TÀI KHOẢN (Sandbox): ${phone} | User ID: ${user._id}`);
-
-      // DELETE USER PERMANENTLY
-      await User.findByIdAndDelete(user._id);
-
-      // Optional: Delete all OTP logs for this user
-      await OtpLog.deleteMany({ phone });
-
-      logUserAction(user._id, 'XÓA TÀI KHOẢN VĨNH VIỄN (Sandbox)', { phone });
-
-      return res.json({ 
-        ok: true, 
-        message: 'Account deleted successfully (sandbox mode)' 
-      });
-    }
-
-    // Production: Verify with eSMS
-    const apiKey = process.env.ESMS_API_KEY;
-    const secretKey = process.env.ESMS_SECRET_KEY;
-
-    if (!apiKey || !secretKey) {
-      logError('userController.confirmDeleteAccount', 'Cấu hình eSMS chưa đầy đủ');
-      return res.status(500).json({ 
-        error: 'esms_config_missing', 
-        message: 'eSMS not configured' 
-      });
-    }
-
-    logInfo('userController.confirmDeleteAccount', `Xác thực OTP xóa tài khoản qua eSMS cho: ${phone}`);
-
-    const checkUrl = 'https://rest.esms.vn/MainService.svc/json/CheckCodeGen_V4_get';
-    const verifyResponse = await axios.get(checkUrl, {
-      params: {
-        ApiKey: apiKey,
-        SecretKey: secretKey,
-        Phone: phone,
-        Code: otp,
-        SMSID: lastLog.sessionId
-      }
-    });
-
-    lastLog.attempts = (lastLog.attempts || 0) + 1;
-
-    if (verifyResponse.data.CodeResult !== '100') {
-      await lastLog.save();
-      logWarning('userController.confirmDeleteAccount', `OTP không đúng cho: ${phone} (lần thử ${lastLog.attempts}/5)`);
-      return res.status(400).json({ 
-        error: 'invalid_otp', 
-        message: 'Invalid OTP code' 
-      });
-    }
-
-    // OTP verified - DELETE USER PERMANENTLY
-    lastLog.status = 'verified';
-    await lastLog.save();
-
-    logWarning('userController.confirmDeleteAccount', `🗑️ XÓA VĨNH VIỄN TÀI KHOẢN (Production): ${phone} | User ID: ${user._id}`);
-
-    await User.findByIdAndDelete(user._id);
-    await OtpLog.deleteMany({ phone });
-
-    logUserAction(user._id, 'XÓA TÀI KHOẢN VĨNH VIỄN (Production)', { phone });
-
-    logSuccess('userController.confirmDeleteAccount', `Xóa tài khoản thành công: ${phone}`);
-
-    return res.json({ 
-      ok: true, 
-      message: 'Account deleted successfully' 
-    });
+    return res.status(400).json({ error: 'invalid_otp', message: 'Invalid OTP code.' });
 
   } catch (err) {
-    logError('userController.confirmDeleteAccount', 'Lỗi không xác định khi xác thực OTP xóa tài khoản', err);
-    return res.status(500).json({ 
-      error: 'server_error',
-      message: 'Failed to delete account' 
-    });
+    if (err instanceof OtpServiceError) {
+      return handleOtpError(res, err, context, user?.phone);
+    }
+    logError(context, 'Lỗi không xác định khi xác thực OTP xóa tài khoản', err);
+    return res.status(500).json({ error: 'server_error', message: 'Failed to delete account' });
   }
 };

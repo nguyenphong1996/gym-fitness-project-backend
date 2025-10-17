@@ -402,7 +402,7 @@ router.put('/profile', authMiddleware, userController.updateProfile);
  *                   example: "cooldown_active"
  *                 message:
  *                   type: string
- *                   example: "Please wait 8s before resending"
+ *                   example: "Please wait 8s before requesting another OTP."
  *       500:
  *         description: Lỗi server
  *         content:
@@ -412,7 +412,8 @@ router.put('/profile', authMiddleware, userController.updateProfile);
  *               properties:
  *                 error:
  *                   type: string
- *                   example: "delete_request_error"
+ *                   enum: [esms_config_missing, sms_send_failed, server_error]
+ *                   example: "server_error"
  *                 message:
  *                   type: string
  *                   example: "Failed to send OTP"
@@ -480,6 +481,7 @@ router.post('/account/delete/request', authMiddleware, userController.requestDel
  *                   enum: [missing_otp, invalid_otp_format, no_otp_request, otp_expired, invalid_otp]
  *                 message:
  *                   type: string
+ *                   example: "OTP has expired. Please request a new one."
  *             examples:
  *               missingOtp:
  *                 summary: Thiếu mã OTP
@@ -505,7 +507,7 @@ router.post('/account/delete/request', authMiddleware, userController.requestDel
  *                 summary: Mã OTP sai
  *                 value:
  *                   error: "invalid_otp"
- *                   message: "Invalid OTP code"
+ *                   message: "Invalid OTP code."
  *       401:
  *         description: Không có quyền truy cập
  *         content:
@@ -541,10 +543,10 @@ router.post('/account/delete/request', authMiddleware, userController.requestDel
  *               properties:
  *                 error:
  *                   type: string
- *                   example: "too_many_attempts"
+ *                   example: "max_attempts_exceeded"
  *                 message:
  *                   type: string
- *                   example: "Maximum verification attempts exceeded"
+ *                   example: "Maximum verification attempts exceeded."
  *       500:
  *         description: Lỗi server
  *         content:
