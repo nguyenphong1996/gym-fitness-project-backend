@@ -4,6 +4,7 @@ const mongoose = require('mongoose');
 const UserSchema = new mongoose.Schema({
   phone: { type: String, required: true, unique: true, index: true },
   isVerified: { type: Boolean, default: false },
+  role: { type: String, enum: ['admin', 'staff', 'customer'], default: 'customer' },
 
   // Profile fields
   name: { type: String, trim: true },

@@ -4,6 +4,7 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const authMiddleware = require('../middlewares/authMiddleware');
+const adminMiddleware = require('../middlewares/adminMiddleware');
 const { uploadVideoFile, getAllVideos, getVideoById, deleteVideoById } = require('../controllers/videoController');
 
 // Tạo thư mục tạm nếu không tồn tại
@@ -53,12 +54,12 @@ const upload = multer({
  *     description: |
  *       Upload video workout lên Cloudinary với hỗ trợ HLS streaming.
  *       
+ *       **Yêu cầu:** Phải có role = admin. Set admin thủ công trong MongoDB Compass.
+ *       
  *       **File Requirements:**
  *       - Định dạng: MP4, MOV, WEBM
  *       - Kích thước: Tối đa 100MB
  *       - Sẽ tự động trích thumbnail tại giây thứ 3
- *       
- *       **Yêu cầu:** Phải đăng nhập và là Admin
  *     requestBody:
  *       required: true
  *       content:
@@ -150,6 +151,19 @@ const upload = multer({
  *                 message:
  *                   type: string
  *                   example: "Unauthorized"
+ *       403:
+ *         description: Forbidden - Chỉ admin mới upload được
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "Forbidden - Admin access required"
+ *                 yourRole:
+ *                   type: string
+ *                   example: "customer"
  *       500:
  *         description: Lỗi server hoặc upload Cloudinary thất bại
  *         content:
@@ -166,7 +180,7 @@ const upload = multer({
  *                 error:
  *                   type: string
  */
-router.post('/upload', authMiddleware, upload.single('video'), uploadVideoFile);
+router.post('/upload', adminMiddleware, upload.single('video'), uploadVideoFile);
 
 /**
  * @swagger
@@ -376,10 +390,11 @@ router.get('/', getAllVideos);
  *     description: |
  *       Xóa video khỏi hệ thống.
  *       
+ *       **Yêu cầu:** Phải có role = admin. Set admin thủ công trong MongoDB Compass.
+ *       
  *       **Tính năng:**
  *       - Xóa từ Cloudinary (dọn dẹp file)
  *       - Xóa record từ MongoDB
- *       - Yêu cầu authentication + Admin role
  *     parameters:
  *       - in: path
  *         name: id
@@ -411,6 +426,19 @@ router.get('/', getAllVideos);
  *                 message:
  *                   type: string
  *                   example: "Unauthorized"
+ *       403:
+ *         description: Forbidden - Chỉ admin mới xóa được
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "Forbidden - Admin access required"
+ *                 yourRole:
+ *                   type: string
+ *                   example: "customer"
  *       404:
  *         description: Video không tồn tại
  *         content:
@@ -439,6 +467,6 @@ router.get('/', getAllVideos);
  *                   example: "Delete failed"
  */
 router.get('/:id', getVideoById);
-router.delete('/:id', authMiddleware, deleteVideoById);
+router.delete('/:id', adminMiddleware, deleteVideoById);
 
 module.exports = router;
