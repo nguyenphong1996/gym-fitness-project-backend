@@ -47,7 +47,7 @@ const upload = multer({
  * @swagger
  * /api/videos/upload:
  *   post:
- *     summary: Upload video mới (Admin only)
+ *     summary: Upload video mới (Admin only) - Duration tự động từ Cloudinary
  *     tags: [Videos]
  *     security:
  *       - bearerAuth: []
@@ -56,11 +56,14 @@ const upload = multer({
  *       
  *       **Yêu cầu:** Phải có role = admin. Set admin thủ công trong MongoDB Compass.
  *       
+ *       **Tính năng tự động:**
+ *       - 📹 Duration (thời lượng): Tự động phát hiện từ file video qua Cloudinary
+ *       - 🖼️ Thumbnail: Trích xuất frame tại giây thứ 3 (300x200px)
+ *       - 🎬 Streaming: HLS m3u8 format cho phát trên nhiều thiết bị
+ *       
  *       **File Requirements:**
  *       - Định dạng: MP4, MOV, WEBM
  *       - Kích thước: Tối đa 100MB
- *       - Sẽ tự động trích thumbnail tại giây thứ 3
- *       - Thời lượng video tự động lấy từ file
  *     requestBody:
  *       required: true
  *       content:
@@ -75,23 +78,23 @@ const upload = multer({
  *               video:
  *                 type: string
  *                 format: binary
- *                 description: File video (MP4, MOV, WEBM), max 100MB
+ *                 description: File video (MP4, MOV, WEBM), max 100MB. Duration sẽ được lấy tự động
  *               title:
  *                 type: string
  *                 example: "Full Body HIIT Workout - 30 minutes"
- *                 description: Tên video
+ *                 description: Tên video (bắt buộc)
  *               estimated_calories:
  *                 type: number
  *                 example: 350
- *                 description: Ước tính kcal đốt cháy
+ *                 description: Ước tính kcal đốt cháy (bắt buộc)
  *               category:
  *                 type: string
  *                 enum: [workout, nutrition, stretching, cardio, yoga, other]
  *                 example: cardio
- *                 description: Loại video
+ *                 description: Loại video (không bắt buộc, mặc định "workout")
  *     responses:
  *       201:
- *         description: Upload thành công, video sẵn sàng stream
+ *         description: Upload thành công, video sẵn sàng stream (duration tự động từ Cloudinary)
  *         content:
  *           application/json:
  *             schema:
@@ -105,6 +108,7 @@ const upload = multer({
  *                   example: "Video uploaded"
  *                 video:
  *                   type: object
+ *                   description: Thông tin video vừa upload (duration từ Cloudinary)
  *                   properties:
  *                     id:
  *                       type: string
@@ -115,6 +119,7 @@ const upload = multer({
  *                     duration:
  *                       type: number
  *                       example: 1800
+ *                       description: Thời lượng video (giây) - tự động phát hiện từ Cloudinary
  *                     estimated_calories:
  *                       type: number
  *                       example: 350
