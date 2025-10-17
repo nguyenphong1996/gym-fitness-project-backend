@@ -16,8 +16,9 @@ const adminMiddleware = async (req, res, next) => {
     // 3. Verify token
     const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your-secret-key');
     
-    // 4. Lấy user từ database
-    const user = await User.findById(decoded.id);
+    // 4. Lấy user từ database (support cả id và userId)
+    const userId = decoded.id || decoded.userId;
+    const user = await User.findById(userId);
     if (!user) {
       return res.status(401).json({ message: 'User not found' });
     }
