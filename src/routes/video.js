@@ -105,52 +105,41 @@ const upload = multer({
  *                   example: true
  *                 message:
  *                   type: string
- *                   example: "Video uploaded successfully"
+ *                   example: "Video uploaded"
  *                 video:
  *                   type: object
  *                   properties:
- *                     _id:
+ *                     id:
  *                       type: string
  *                       example: "68eff234c8db2a37df681570"
  *                     title:
  *                       type: string
- *                     cloudinary_id:
- *                       type: string
- *                       description: ID video tại Cloudinary
- *                     url:
- *                       type: string
- *                       format: uri
- *                       description: URL video gốc
- *                     thumbnail:
- *                       type: string
- *                       format: uri
- *                       description: URL thumbnail (frame @3s, 300x200)
+ *                       example: "Full Body HIIT Workout"
  *                     duration:
  *                       type: number
+ *                       example: 1800
  *                     estimated_calories:
  *                       type: number
+ *                       example: 350
  *                     category:
  *                       type: string
- *                     views:
- *                       type: number
- *                       example: 0
- *                     createdAt:
- *                       type: string
- *                       format: date-time
+ *                       example: "cardio"
  *       400:
- *         description: Validation error hoặc file không hợp lệ
+ *         description: Validation error - Thiếu field hoặc file không hợp lệ
  *         content:
  *           application/json:
  *             schema:
  *               type: object
  *               properties:
- *                 error:
- *                   type: string
- *                   enum: [missing_fields, invalid_file, file_too_large, unsupported_format]
- *                   example: "missing_fields"
+ *                 success:
+ *                   type: boolean
+ *                   example: false
  *                 message:
  *                   type: string
- *                   example: "Missing required fields: title, duration, estimated_calories"
+ *                   enum:
+ *                     - "Video file required"
+ *                     - "Title, duration, calories required"
+ *                     - "Only video files allowed (MP4, MOV, WEBM)"
  *       401:
  *         description: Không có authorization hoặc token không hợp lệ
  *         content:
@@ -158,13 +147,9 @@ const upload = multer({
  *             schema:
  *               type: object
  *               properties:
- *                 error:
- *                   type: string
- *                   enum: [missing_token, invalid_token, expired_token]
- *                   example: "missing_token"
  *                 message:
  *                   type: string
- *                   example: "Authorization header required"
+ *                   example: "Unauthorized"
  *       500:
  *         description: Lỗi server hoặc upload Cloudinary thất bại
  *         content:
@@ -172,13 +157,14 @@ const upload = multer({
  *             schema:
  *               type: object
  *               properties:
- *                 error:
- *                   type: string
- *                   enum: [cloudinary_error, database_error, server_error]
- *                   example: "cloudinary_error"
+ *                 success:
+ *                   type: boolean
+ *                   example: false
  *                 message:
  *                   type: string
- *                   example: "Failed to upload video to Cloudinary"
+ *                   example: "Upload failed"
+ *                 error:
+ *                   type: string
  */
 router.post('/upload', authMiddleware, upload.single('video'), uploadVideoFile);
 
@@ -234,41 +220,39 @@ router.post('/upload', authMiddleware, upload.single('video'), uploadVideoFile);
  *                   items:
  *                     type: object
  *                     properties:
- *                       _id:
+ *                       id:
  *                         type: string
  *                         example: "68eff234c8db2a37df681570"
  *                       title:
  *                         type: string
- *                       category:
- *                         type: string
- *                       duration:
- *                         type: number
- *                       estimated_calories:
- *                         type: number
+ *                         example: "Full Body HIIT"
  *                       thumbnail:
  *                         type: string
  *                         format: uri
  *                         description: URL thumbnail 300x200
+ *                       duration:
+ *                         type: number
+ *                         example: 1800
+ *                       estimated_calories:
+ *                         type: number
+ *                         example: 350
+ *                       category:
+ *                         type: string
+ *                         example: "cardio"
  *                       views:
  *                         type: number
- *                       createdAt:
- *                         type: string
- *                         format: date-time
- *                 pagination:
- *                   type: object
- *                   properties:
- *                     total:
- *                       type: number
- *                       example: 45
- *                     page:
- *                       type: number
- *                       example: 1
- *                     limit:
- *                       type: number
- *                       example: 10
- *                     pages:
- *                       type: number
- *                       example: 5
+ *                         example: 42
+ *                 total:
+ *                   type: number
+ *                   example: 45
+ *                   description: Tổng số video
+ *                 page:
+ *                   type: number
+ *                   example: 1
+ *                 pages:
+ *                   type: number
+ *                   example: 5
+ *                   description: Tổng số trang
  *       400:
  *         description: Validation error (page, limit không hợp lệ)
  *         content:
@@ -276,13 +260,12 @@ router.post('/upload', authMiddleware, upload.single('video'), uploadVideoFile);
  *             schema:
  *               type: object
  *               properties:
- *                 error:
- *                   type: string
- *                   enum: [invalid_page, invalid_limit, invalid_category]
- *                   example: "invalid_limit"
+ *                 success:
+ *                   type: boolean
+ *                   example: false
  *                 message:
  *                   type: string
- *                   example: "Limit must be between 1 and 50"
+ *                   example: "Invalid page or limit"
  *       500:
  *         description: Lỗi server
  *         content:
@@ -290,12 +273,12 @@ router.post('/upload', authMiddleware, upload.single('video'), uploadVideoFile);
  *             schema:
  *               type: object
  *               properties:
- *                 error:
- *                   type: string
- *                   example: "database_error"
+ *                 success:
+ *                   type: boolean
+ *                   example: false
  *                 message:
  *                   type: string
- *                   example: "Failed to fetch videos"
+ *                   example: "Get videos failed"
  */
 router.get('/', getAllVideos);
 
@@ -333,22 +316,12 @@ router.get('/', getAllVideos);
  *                 video:
  *                   type: object
  *                   properties:
- *                     _id:
+ *                     id:
  *                       type: string
  *                       example: "68eff234c8db2a37df681570"
  *                     title:
  *                       type: string
- *                     category:
- *                       type: string
- *                     duration:
- *                       type: number
- *                       example: 1800
- *                     estimated_calories:
- *                       type: number
- *                       example: 350
- *                     views:
- *                       type: number
- *                       example: 42
+ *                       example: "Full Body HIIT"
  *                     thumbnail:
  *                       type: string
  *                       format: uri
@@ -357,14 +330,18 @@ router.get('/', getAllVideos);
  *                       type: string
  *                       format: uri
  *                       description: URL HLS m3u8 để stream video
- *                       example: "https://res.cloudinary.com/.../pl_hls/video.m3u8"
- *                     url:
+ *                     duration:
+ *                       type: number
+ *                       example: 1800
+ *                     estimated_calories:
+ *                       type: number
+ *                       example: 350
+ *                     category:
  *                       type: string
- *                       format: uri
- *                       description: URL video gốc
- *                     createdAt:
- *                       type: string
- *                       format: date-time
+ *                       example: "cardio"
+ *                     views:
+ *                       type: number
+ *                       example: 43
  *       404:
  *         description: Video không tồn tại
  *         content:
@@ -372,10 +349,9 @@ router.get('/', getAllVideos);
  *             schema:
  *               type: object
  *               properties:
- *                 error:
- *                   type: string
- *                   enum: [video_not_found, invalid_video_id]
- *                   example: "video_not_found"
+ *                 success:
+ *                   type: boolean
+ *                   example: false
  *                 message:
  *                   type: string
  *                   example: "Video not found"
@@ -386,12 +362,12 @@ router.get('/', getAllVideos);
  *             schema:
  *               type: object
  *               properties:
- *                 error:
- *                   type: string
- *                   example: "database_error"
+ *                 success:
+ *                   type: boolean
+ *                   example: false
  *                 message:
  *                   type: string
- *                   example: "Failed to fetch video details"
+ *                   example: "Get video failed"
  *   delete:
  *     summary: Xóa video (Admin only)
  *     tags: [Videos]
@@ -424,7 +400,7 @@ router.get('/', getAllVideos);
  *                   example: true
  *                 message:
  *                   type: string
- *                   example: "Video deleted successfully"
+ *                   example: "Video deleted"
  *       401:
  *         description: Không có authorization hoặc token không hợp lệ
  *         content:
@@ -432,13 +408,9 @@ router.get('/', getAllVideos);
  *             schema:
  *               type: object
  *               properties:
- *                 error:
- *                   type: string
- *                   enum: [missing_token, invalid_token, expired_token]
- *                   example: "missing_token"
  *                 message:
  *                   type: string
- *                   example: "Authorization header required"
+ *                   example: "Unauthorized"
  *       404:
  *         description: Video không tồn tại
  *         content:
@@ -446,10 +418,9 @@ router.get('/', getAllVideos);
  *             schema:
  *               type: object
  *               properties:
- *                 error:
- *                   type: string
- *                   enum: [video_not_found, invalid_video_id]
- *                   example: "video_not_found"
+ *                 success:
+ *                   type: boolean
+ *                   example: false
  *                 message:
  *                   type: string
  *                   example: "Video not found"
@@ -460,13 +431,12 @@ router.get('/', getAllVideos);
  *             schema:
  *               type: object
  *               properties:
- *                 error:
- *                   type: string
- *                   enum: [cloudinary_error, database_error, server_error]
- *                   example: "cloudinary_error"
+ *                 success:
+ *                   type: boolean
+ *                   example: false
  *                 message:
  *                   type: string
- *                   example: "Failed to delete video from Cloudinary"
+ *                   example: "Delete failed"
  */
 router.get('/:id', getVideoById);
 router.delete('/:id', authMiddleware, deleteVideoById);

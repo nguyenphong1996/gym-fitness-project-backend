@@ -228,10 +228,40 @@ router.put('/profile', authMiddleware, userController.updateProfile);
  *                 avatar: { type: string, format: uri, example: "https://res.cloudinary.com/.../new_avatar.jpg" }
  *       400:
  *         description: Lỗi file (không có file, sai định dạng, quá lớn)
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error: { type: string, example: "file_missing" }
+ *                 message: { type: string, example: "No image file provided." }
  *       401:
  *         description: Unauthorized
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error: { type: string, example: "unauthorized" }
+ *                 message: { type: string, example: "No token provided" }
+ *       404:
+ *         description: User không tồn tại
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error: { type: string, example: "user_not_found" }
+ *                 message: { type: string, example: "User not found." }
  *       500:
  *         description: Lỗi server hoặc upload thất bại
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error: { type: string, example: "server_error" }
+ *                 message: { type: string, example: "Failed to update avatar." }
  */
 router.put('/avatar', authMiddleware, upload.single('avatar'), userController.updateAvatar);
 
