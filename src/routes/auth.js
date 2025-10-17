@@ -69,11 +69,11 @@ const authController = require('../controllers/authController');
  *               properties:
  *                 error:
  *                   type: string
- *                   enum: [missing_phone, invalid_phone, user_exists]
- *                   example: "invalid_phone"
+ *                   enum: [missing_phone, invalid_phone, phone_already_registered]
+ *                   example: "phone_already_registered"
  *                 message:
  *                   type: string
- *                   example: "Phone number must be 10 digits starting with 0"
+ *                   example: "Phone number already registered. Please login instead."
  *       429:
  *         description: Quá nhiều yêu cầu OTP hoặc cooldown chưa hết
  *         content:
@@ -87,7 +87,7 @@ const authController = require('../controllers/authController');
  *                   example: "cooldown_active"
  *                 message:
  *                   type: string
- *                   example: "Please wait 5s before resending"
+ *                   example: "Please wait 5s before requesting another OTP."
  *       500:
  *         description: Lỗi server hoặc gửi SMS thất bại
  *         content:
@@ -98,7 +98,7 @@ const authController = require('../controllers/authController');
  *                 error:
  *                   type: string
  *                   enum: [esms_config_missing, sms_send_failed, server_error]
- *                   example: "server_error"
+ *                   example: "sms_send_failed"
  *                 message:
  *                   type: string
  *                   example: "Failed to send OTP. Please try again."
@@ -182,7 +182,7 @@ router.post('/register', authController.register);
  *                   example: "otp_expired"
  *                 message:
  *                   type: string
- *                   example: "OTP expired"
+ *                   example: "OTP has expired. Please request a new one."
  *       429:
  *         description: Quá số lần thử OTP
  *         content:
@@ -192,10 +192,10 @@ router.post('/register', authController.register);
  *               properties:
  *                 error:
  *                   type: string
- *                   example: "too_many_attempts"
+ *                   example: "max_attempts_exceeded"
  *                 message:
  *                   type: string
- *                   example: "Too many attempts"
+ *                   example: "Maximum verification attempts exceeded."
  *       500:
  *         description: Lỗi server
  *         content:
@@ -285,10 +285,10 @@ router.post('/verify-register', authController.verifyRegister);
  *               properties:
  *                 error:
  *                   type: string
- *                   example: "user_not_found"
+ *                   example: "user_not_found_or_unverified"
  *                 message:
  *                   type: string
- *                   example: "Phone not registered. Please sign up first."
+ *                   example: "Account not found or not verified. Please sign up first."
  *       429:
  *         description: Quá nhiều yêu cầu hoặc cooldown
  *         content:
@@ -302,7 +302,7 @@ router.post('/verify-register', authController.verifyRegister);
  *                   example: "cooldown_active"
  *                 message:
  *                   type: string
- *                   example: "Please wait 8s before resending"
+ *                   example: "Please wait 8s before requesting another OTP."
  *       500:
  *         description: Lỗi server
  *         content:
@@ -312,7 +312,8 @@ router.post('/verify-register', authController.verifyRegister);
  *               properties:
  *                 error:
  *                   type: string
- *                   example: "login_error"
+ *                   enum: [esms_config_missing, sms_send_failed, server_error]
+ *                   example: "server_error"
  *                 message:
  *                   type: string
  *                   example: "Failed to send login OTP"
@@ -393,7 +394,7 @@ router.post('/login', authController.login);
  *                   example: "invalid_otp"
  *                 message:
  *                   type: string
- *                   example: "Invalid OTP code"
+ *                   example: "Invalid OTP code."
  *       404:
  *         description: User không tồn tại hoặc chưa verify
  *         content:
@@ -416,10 +417,10 @@ router.post('/login', authController.login);
  *               properties:
  *                 error:
  *                   type: string
- *                   example: "too_many_attempts"
+ *                   example: "max_attempts_exceeded"
  *                 message:
  *                   type: string
- *                   example: "Too many attempts"
+ *                   example: "Maximum verification attempts exceeded."
  *       500:
  *         description: Lỗi server
  *         content:

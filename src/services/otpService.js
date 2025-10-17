@@ -1,185 +1,235 @@
-const https = require('https');
-const http = require('http');
-const { URL } = require('url');
 
+// services/otpService.js
+const axios = require('axios');
+const OtpLog = require('../models/OtpLog');
+const { logError, logSuccess, logWarning, logInfo, logOTP, logRateLimit } = require('../utils/logger');
+
+const {
+  ESMS_API_KEY, ESMS_SECRET_KEY, ESMS_BRANDNAME,
+  NODE_ENV, ESMS_SANDBOX,
+  RESEND_COOLDOWN_SECONDS = 60,
+  MAX_OTPS_PER_HOUR = 10,
+  OTP_EXPIRATION_MINUTES = 10,
+  MAX_VERIFY_ATTEMPTS = 5
+} = process.env;
+
+const ESMS_SEND_URL = 'https://rest.esms.vn/MainService.svc/json/SendMessageAutoGenCode_V4_get';
+const ESMS_CHECK_URL = 'https://rest.esms.vn/MainService.svc/json/CheckCodeGen_V4_get';
+
+// Custom Error for OTP service
 class OtpServiceError extends Error {
-  constructor(message, options = {}) {
+  constructor(message, details = {}) {
     super(message);
     this.name = 'OtpServiceError';
-    this.statusCode = options.statusCode || 500;
-    this.details = options.details;
+    this.statusCode = details.statusCode || 400;
+    this.code = details.code || 'otp_error';
   }
 }
 
-const BASE_URL = process.env.ESMS_BASE_URL || 'https://rest.esms.vn/MainService.svc/json';
-const API_KEY = process.env.ESMS_API_KEY;
-const SECRET_KEY = process.env.ESMS_SECRET_KEY;
-const BRAND_NAME = process.env.ESMS_BRAND_NAME;
-const OTP_TYPE = process.env.ESMS_OTP_TYPE ? Number(process.env.ESMS_OTP_TYPE) : undefined;
-const CONTENT_TEMPLATE = process.env.ESMS_OTP_CONTENT || 'Ma xac thuc OTP cua ban la {OTP}.';
-
-function buildUrl(pathname) {
-  const trimmedBase = BASE_URL.replace(/\/$/, '');
-  const trimmedPath = pathname.replace(/^\//, '');
-  return `${trimmedBase}/${trimmedPath}`;
-}
-
-function postJson(pathname, payload) {
-  const url = new URL(buildUrl(pathname));
-  const data = JSON.stringify(payload);
-
-  const options = {
-    method: 'POST',
-    hostname: url.hostname,
-    path: url.pathname + url.search,
-    port: url.port || undefined,
-    headers: {
-      'Content-Type': 'application/json',
-      'Content-Length': Buffer.byteLength(data)
+/**
+ * Checks if eSMS is configured. Throws an error if not.
+ */
+function ensureEsmsConfigured() {
+  if (NODE_ENV !== 'development' && ESMS_SANDBOX !== 'true') {
+    if (!ESMS_API_KEY || !ESMS_SECRET_KEY || !ESMS_BRANDNAME) {
+      logError('otpService', 'Cấu hình eSMS (API_KEY, SECRET_KEY, BRANDNAME) chưa đầy đủ cho production.');
+      throw new OtpServiceError('eSMS service is not configured on the server.', {
+        statusCode: 500,
+        code: 'esms_config_missing'
+      });
     }
-  };
+  }
+}
 
-  const transport = url.protocol === 'http:' ? http : https;
+/**
+ * Gets the appropriate content for the OTP message based on the type.
+ * @param {string} type - The type of OTP ('register', 'login', 'delete_account').
+ * @returns {string} The message content.
+ */
+function getOtpContent(type) {
+  switch (type) {
+    case 'register':
+      return 'Ma xac nhan dang ky tai khoan cua ban';
+    case 'login':
+      return 'Ma xac nhan dang nhap tai khoan cua ban';
+    case 'delete_account':
+      return 'Ma xac nhan xoa tai khoan vinh vien cua ban';
+    default:
+      return 'Ma xac thuc cua ban';
+  }
+}
 
-  return new Promise((resolve, reject) => {
-    const request = transport.request(options, (response) => {
-      let responseBody = '';
+/**
+ * Requests an OTP for a given phone number and type.
+ * Handles rate limiting, cooldowns, and sandbox mode.
+ * @param {string} phone - The user's phone number.
+ * @param {string} type - The purpose of the OTP ('register', 'login', 'delete_account').
+ * @param {string} ip - The user's IP address for logging.
+ * @returns {object} Result of the OTP request.
+ */
+exports.requestOtp = async (phone, type, ip) => {
+  ensureEsmsConfigured();
 
-      response.on('data', (chunk) => {
-        responseBody += chunk;
-      });
+  // 1. Rate Limiting Check
+  const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+  const recentCount = await OtpLog.countDocuments({ phone, type, createdAt: { $gte: oneHourAgo } });
+  const maxOtps = parseInt(MAX_OTPS_PER_HOUR);
 
-      response.on('end', () => {
-        try {
-          const parsed = responseBody ? JSON.parse(responseBody) : {};
-          if (response.statusCode && response.statusCode >= 200 && response.statusCode < 300) {
-            resolve(parsed);
-          } else {
-            reject(new OtpServiceError('ESMS tra ve loi', {
-              statusCode: response.statusCode || 502,
-              details: parsed
-            }));
-          }
-        } catch (err) {
-          reject(new OtpServiceError('Khong the phan tich du lieu tu ESMS', {
-            statusCode: 502,
-            details: { raw: responseBody }
-          }));
-        }
-      });
+  if (recentCount >= maxOtps) {
+    logRateLimit(phone, `requestOtp:${type}`, maxOtps - recentCount);
+    throw new OtpServiceError(`Too many OTP requests. Maximum ${maxOtps} requests per hour.`, {
+      statusCode: 429,
+      code: 'rate_limit_exceeded'
     });
+  }
 
-    request.on('error', (error) => {
-      reject(new OtpServiceError('Khong the ket noi den dich vu ESMS', {
-        statusCode: 502,
-        details: { error: error.message }
-      }));
+  // 2. Cooldown Check
+  const cooldown = parseInt(RESEND_COOLDOWN_SECONDS);
+  const cooldownAgo = new Date(Date.now() - cooldown * 1000);
+  const recentOtp = await OtpLog.findOne({ phone, type, createdAt: { $gte: cooldownAgo } });
+
+  if (recentOtp) {
+    const waitTime = Math.ceil((cooldown * 1000 - (Date.now() - recentOtp.createdAt.getTime())) / 1000);
+    throw new OtpServiceError(`Please wait ${waitTime} seconds before requesting another OTP.`, {
+      statusCode: 429,
+      code: 'cooldown_active'
     });
+  }
 
-    request.write(data);
-    request.end();
+  const expiresAt = new Date(Date.now() + parseInt(OTP_EXPIRATION_MINUTES) * 60 * 1000);
+
+  // 3. Sandbox Mode
+  if (NODE_ENV === 'development' || ESMS_SANDBOX === 'true') {
+    const mockCode = Math.floor(1000 + Math.random() * 9000).toString();
+    const sessionId = `sandbox-${type}-${Date.now()}`;
+    
+    await OtpLog.create({ phone, type, sessionId, expiresAt, status: 'pending', ip });
+    logOTP(`Gửi OTP ${type} (Sandbox)`, phone, mockCode, expiresAt);
+    
+    return {
+      ok: true,
+      message: `OTP sent successfully to your phone (sandbox mode)`,
+      sessionId,
+      expiresIn: parseInt(OTP_EXPIRATION_MINUTES) * 60,
+      dev_otp: mockCode
+    };
+  }
+
+  // 4. Production: Send real OTP via eSMS
+  logInfo('otpService.requestOtp', `Gửi OTP ${type} qua eSMS API cho: ${phone}`);
+  const response = await axios.get(ESMS_SEND_URL, {
+    params: {
+      ApiKey: ESMS_API_KEY,
+      SecretKey: ESMS_SECRET_KEY,
+      Phone: phone,
+      Content: getOtpContent(type),
+      Brandname: ESMS_BRANDNAME,
+      SmsType: 8 // SMS brandname quảng cáo
+    },
+    timeout: 10000
   });
-}
 
-function ensureCredentials() {
-  if (!API_KEY || !SECRET_KEY) {
-    throw new OtpServiceError('Thieu cau hinh ESMS_API_KEY hoac ESMS_SECRET_KEY', { statusCode: 500 });
-  }
-}
+  const data = response.data;
 
-function parseCodeResult(response) {
-  const code = Number(response.CodeResult);
-  return {
-    codeResult: Number.isNaN(code) ? response.CodeResult : code,
-    errorMessage: response.ErrorMessage,
-    sessionId: response.SessionId || response.SessionID,
-    smsId: response.SMSID || response.SMSId,
-    raw: response
-  };
-}
-
-async function sendOtp(phoneNumber, options = {}) {
-  ensureCredentials();
-
-  if (!phoneNumber) {
-    throw new OtpServiceError('So dien thoai la bat buoc', { statusCode: 400 });
-  }
-
-  const payload = {
-    ApiKey: API_KEY,
-    SecretKey: SECRET_KEY,
-    Phone: phoneNumber,
-    Content: options.content || CONTENT_TEMPLATE
-  };
-
-  const brandName = options.brandName || BRAND_NAME;
-  if (brandName) {
-    payload.BrandName = brandName;
-  }
-
-  const otpTypeValue = options.otpType !== undefined ? Number(options.otpType) : OTP_TYPE;
-  if (otpTypeValue !== undefined && otpTypeValue !== null && !Number.isNaN(otpTypeValue)) {
-    payload.OTPType = otpTypeValue;
-  }
-
-  const response = await postJson('SendOTP', payload);
-  const parsed = parseCodeResult(response);
-
-  if (parsed.codeResult !== 100) {
-    throw new OtpServiceError(parsed.errorMessage || 'Khong the gui OTP', {
-      statusCode: 502,
-      details: parsed.raw
+  if (data.CodeResult !== '100') {
+    logError('otpService.requestOtp', `eSMS API trả về lỗi khi gửi OTP ${type}`, data);
+    await OtpLog.create({ phone, type, status: 'failed', apiResult: data, ip });
+    throw new OtpServiceError('Failed to send OTP. Please try again later.', {
+      statusCode: 500,
+      code: 'sms_send_failed'
     });
   }
 
-  return {
-    message: 'Gui OTP thanh cong',
-    sessionId: parsed.sessionId,
-    smsId: parsed.smsId,
-    response: parsed.raw
-  };
-}
-
-async function verifyOtp({ sessionId, code, phone }) {
-  ensureCredentials();
-
-  if (!sessionId) {
-    throw new OtpServiceError('SessionId la bat buoc', { statusCode: 400 });
-  }
-
-  if (!code) {
-    throw new OtpServiceError('Ma OTP la bat buoc', { statusCode: 400 });
-  }
-
-  const payload = {
-    ApiKey: API_KEY,
-    SecretKey: SECRET_KEY,
-    SessionId: sessionId,
-    Code: code
-  };
-
-  if (phone) {
-    payload.Phone = phone;
-  }
-
-  const response = await postJson('CheckOTP', payload);
-  const parsed = parseCodeResult(response);
-
-  if (parsed.codeResult !== 100) {
-    throw new OtpServiceError(parsed.errorMessage || 'OTP khong hop le', {
-      statusCode: 400,
-      details: parsed.raw
-    });
-  }
+  const sessionId = data.SMSID;
+  await OtpLog.create({ phone, type, sessionId, expiresAt, status: 'pending', apiResult: data, ip });
+  logSuccess('otpService.requestOtp', `Gửi OTP ${type} thành công cho: ${phone}`, { sessionId });
 
   return {
-    message: 'Xac thuc OTP thanh cong',
-    response: parsed.raw
+    ok: true,
+    message: 'OTP sent successfully to your phone',
+    sessionId,
+    expiresIn: parseInt(OTP_EXPIRATION_MINUTES) * 60
   };
-}
-
-module.exports = {
-  sendOtp,
-  verifyOtp,
-  OtpServiceError
 };
+
+/**
+ * Verifies an OTP for a given phone number and type.
+ * Handles expiration, max attempts, and sandbox mode.
+ * @param {string} phone - The user's phone number.
+ * @param {string} otp - The OTP code from the user.
+ * @param {string} type - The purpose of the OTP ('register', 'login', 'delete_account').
+ * @returns {Promise<boolean>} True if verification is successful.
+ */
+exports.verifyOtp = async (phone, otp, type) => {
+  ensureEsmsConfigured();
+
+  // 1. Find the latest pending OTP log
+  const lastLog = await OtpLog.findOne({ phone, type, status: 'pending' }).sort({ createdAt: -1 });
+
+  if (!lastLog) {
+    throw new OtpServiceError('No OTP request found. Please request OTP first.', { code: 'no_otp_request' });
+  }
+
+  // 2. Check expiration
+  if (new Date() > lastLog.expiresAt) {
+    lastLog.status = 'expired';
+    await lastLog.save();
+    throw new OtpServiceError('OTP has expired. Please request a new one.', { code: 'otp_expired' });
+  }
+
+  // 3. Check max attempts
+  const maxAttempts = parseInt(MAX_VERIFY_ATTEMPTS);
+  if ((lastLog.attempts || 0) >= maxAttempts) {
+    lastLog.status = 'failed';
+    await lastLog.save();
+    throw new OtpServiceError('Maximum verification attempts exceeded.', {
+      statusCode: 429,
+      code: 'max_attempts_exceeded'
+    });
+  }
+
+  // 4. Sandbox Mode
+  if (NODE_ENV === 'development' || ESMS_SANDBOX === 'true') {
+    logInfo('otpService.verifyOtp', `Xác thực OTP ${type} (Sandbox) cho: ${phone}`);
+    // In sandbox, any 4-digit code is accepted for simplicity.
+    // A specific dev_otp could also be checked here if needed.
+    if (/^\d{4}$/.test(otp)) {
+      lastLog.status = 'verified';
+      await lastLog.save();
+      return true;
+    } else {
+      lastLog.attempts = (lastLog.attempts || 0) + 1;
+      await lastLog.save();
+      throw new OtpServiceError('Invalid OTP code.', { code: 'invalid_otp' });
+    }
+  }
+
+  // 5. Production: Verify with eSMS API
+  logInfo('otpService.verifyOtp', `Xác thực OTP ${type} qua eSMS API cho: ${phone}`);
+  lastLog.attempts = (lastLog.attempts || 0) + 1;
+
+  const verifyResponse = await axios.get(ESMS_CHECK_URL, {
+    params: {
+      ApiKey: ESMS_API_KEY,
+      SecretKey: ESMS_SECRET_KEY,
+      Phone: phone,
+      Code: otp,
+      SMSID: lastLog.sessionId
+    },
+    timeout: 10000
+  });
+
+  if (verifyResponse.data.CodeResult !== '100') {
+    await lastLog.save();
+    logWarning('otpService.verifyOtp', `OTP ${type} không đúng cho: ${phone} (lần thử ${lastLog.attempts}/${maxAttempts})`);
+    throw new OtpServiceError('Invalid OTP code.', { code: 'invalid_otp' });
+  }
+
+  // 6. Success
+  lastLog.status = 'verified';
+  await lastLog.save();
+  logSuccess('otpService.verifyOtp', `Xác thực OTP ${type} thành công cho: ${phone}`);
+  return true;
+};
+
+exports.OtpServiceError = OtpServiceError;
