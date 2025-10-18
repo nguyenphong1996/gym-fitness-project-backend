@@ -162,6 +162,11 @@ router.post('/register', authController.register);
  *                     phone:
  *                       type: string
  *                       example: "0912345678"
+ *                     role:
+ *                       type: string
+ *                       enum: [admin, staff, customer]
+ *                       example: "customer"
+ *                       description: "Vai trò người dùng (mặc định customer)"
  *                     isVerified:
  *                       type: boolean
  *                       example: true
@@ -377,6 +382,11 @@ router.post('/login', authController.login);
  *                     phone:
  *                       type: string
  *                       example: "0912345678"
+ *                     role:
+ *                       type: string
+ *                       enum: [admin, staff, customer]
+ *                       example: "customer"
+ *                       description: "Vai trò người dùng"
  *                     createdAt:
  *                       type: string
  *                       format: date-time

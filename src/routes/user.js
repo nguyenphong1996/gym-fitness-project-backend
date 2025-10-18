@@ -24,7 +24,7 @@ const storage = multer.diskStorage({
 const upload = multer({
   storage: storage,
   fileFilter: (req, file, cb) => {
-    const allowedMimes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+    const allowedMimes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/jpg'];
     if (allowedMimes.includes(file.mimetype)) {
       cb(null, true);
     } else {
@@ -47,7 +47,7 @@ const upload = multer({
  * /api/user/profile:
  *   get:
  *     summary: Lấy thông tin profile của user đang đăng nhập
- *     description: Trả về đầy đủ thông tin profile bao gồm name, email, avatar, dob, weight, height
+ *     description: Trả về đầy đủ thông tin profile bao gồm name, email, avatar, dob, weight, height, role
  *     tags: [User]
  *     security:
  *       - bearerAuth: []
@@ -103,6 +103,11 @@ const upload = multer({
  *                       type: number
  *                       nullable: true
  *                       example: 175
+ *                     role:
+ *                       type: string
+ *                       enum: [admin, staff, customer]
+ *                       example: "customer"
+ *                       description: "Vai trò người dùng (mặc định customer)"
  *                     isVerified:
  *                       type: boolean
  *                       example: true

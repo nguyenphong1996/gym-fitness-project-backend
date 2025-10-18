@@ -10,9 +10,9 @@ const { logError, logSuccess, logWarning, logDebug, logUserAction, logAvatarUplo
 
 function handleOtpError(res, err, context, phone) {
   logWarning(context, err.message, { code: err.code, phone });
-  return res.status(err.statusCode).json({ 
+  return res.status(err.statusCode).json({
     error: err.code,
-    message: err.message 
+    message: err.message
   });
 }
 
@@ -86,6 +86,9 @@ exports.updateProfile = async (req, res) => {
 
 exports.updateAvatar = async (req, res) => {
   const context = 'userController.updateAvatar';
+
+  console.log('req.file:', req.file);
+
   const tempPath = req.file?.path;
 
   try {
@@ -133,10 +136,10 @@ exports.updateAvatar = async (req, res) => {
 
     logUserAction(user._id, 'Cập nhật avatar', { new_id: cloudinary_id });
 
-    return res.json({ 
-      ok: true, 
-      message: 'Avatar updated successfully', 
-      avatar: url 
+    return res.json({
+      ok: true,
+      message: 'Avatar updated successfully',
+      avatar: url
     });
 
   } catch (err) {
@@ -170,7 +173,7 @@ exports.requestDeleteAccount = async (req, res) => {
 
     logWarning(context, `⚠️ Yêu cầu XÓA TÀI KHOẢN từ: ${phone}`);
     const result = await otpService.requestOtp(phone, 'delete_account', req.ip);
-    
+
     return res.json(result);
 
   } catch (err) {
@@ -212,7 +215,7 @@ exports.confirmDeleteAccount = async (req, res) => {
       }
 
       await User.findByIdAndDelete(userId);
-      
+
       const OtpLog = require('../models/OtpLog');
       await OtpLog.deleteMany({ phone: userPhone });
 
