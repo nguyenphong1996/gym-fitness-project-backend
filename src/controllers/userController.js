@@ -86,6 +86,9 @@ exports.updateProfile = async (req, res) => {
 
 exports.updateAvatar = async (req, res) => {
   const context = 'userController.updateAvatar';
+
+  console.log('req.file:', req.file);
+
   const tempPath = req.file?.path;
 
   try {
