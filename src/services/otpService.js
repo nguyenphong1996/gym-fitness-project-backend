@@ -13,7 +13,10 @@ const {
   MAX_VERIFY_ATTEMPTS = 5
 } = process.env;
 
-const ESMS_SEND_URL = 'https://rest.esms.vn/MainService.svc/json/SendMessageAutoGenCode_V4_get';
+// Allow overriding SmsType via env (eSMS doc specifies SmsType=2 for OTP)
+const ESMS_SMS_TYPE = process.env.ESMS_SMS_TYPE || '2';
+
+const ESMS_SEND_URL = 'https://rest.esms.vn/MainService.svc/json/SendMultipleMessage_V4_post';
 const ESMS_CHECK_URL = 'https://rest.esms.vn/MainService.svc/json/CheckCodeGen_V4_get';
 
 // Custom Error for OTP service
@@ -117,14 +120,19 @@ exports.requestOtp = async (phone, type, ip) => {
 
   // 4. Production: Send real OTP via eSMS
   logInfo('otpService.requestOtp', `Gửi OTP ${type} qua eSMS API cho: ${phone}`);
-  const response = await axios.get(ESMS_SEND_URL, {
-    params: {
-      ApiKey: ESMS_API_KEY,
-      SecretKey: ESMS_SECRET_KEY,
-      Phone: phone,
-      Content: getOtpContent(type),
-      Brandname: ESMS_BRANDNAME,
-      SmsType: 8 // SMS brandname quảng cáo
+  
+  // eSMS API requires form-urlencoded, not JSON body
+  const params = new URLSearchParams();
+  params.append('ApiKey', ESMS_API_KEY);
+  params.append('SecretKey', ESMS_SECRET_KEY);
+  params.append('Phone', phone);
+  params.append('Content', getOtpContent(type));
+  params.append('Brandname', ESMS_BRANDNAME);
+  params.append('SmsType', ESMS_SMS_TYPE);
+  
+  const response = await axios.post(ESMS_SEND_URL, params, {
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded'
     },
     timeout: 10000
   });
