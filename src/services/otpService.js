@@ -49,16 +49,18 @@ function ensureEsmsConfigured() {
  * @param {string} type - The type of OTP ('register', 'login', 'delete_account').
  * @returns {string} The message content.
  */
-function getOtpContent(type) {
+function getOtpContent(type, otp, brandName) {
+  const safeBrandName = brandName || 'dich vu';
+
   switch (type) {
     case 'register':
-      return 'Ma xac nhan dang ky tai khoan cua ban';
+      return `${otp} la ma xac minh dang ky ${safeBrandName} cua ban`;
     case 'login':
-      return 'Ma xac nhan dang nhap tai khoan cua ban';
+      return `${otp} la ma xac minh dang nhap ${safeBrandName} cua ban`;
     case 'delete_account':
-      return 'Ma xac nhan xoa tai khoan vinh vien cua ban';
+      return `${otp} la ma xac minh xoa tai khoan ${safeBrandName} cua ban`;
     default:
-      return 'Ma xac thuc cua ban';
+      return `${otp} la ma xac minh ${safeBrandName} cua ban`;
   }
 }
 
@@ -125,12 +127,13 @@ exports.requestOtp = async (phone, type, ip) => {
   // Note: Content must match registered template or will get error 146
   // Format: "CODE la ma xac minh dang ky/dang nhap Brandname cua ban"
   const otp = Math.floor(1000 + Math.random() * 9000).toString(); // Generate 4-digit OTP
-  
+  const content = getOtpContent(type, otp, ESMS_BRANDNAME);
+
   const response = await axios.post(ESMS_SEND_URL, {
     ApiKey: ESMS_API_KEY,
     SecretKey: ESMS_SECRET_KEY,
     Phone: phone,
-    Content: `${otp} la ma xac minh dang ${type} ${ESMS_BRANDNAME} cua ban`,
+    Content: content,
     Brandname: ESMS_BRANDNAME,
     SmsType: ESMS_SMS_TYPE,
     IsUnicode: '0'

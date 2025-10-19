@@ -1,12 +1,18 @@
 var express = require('express');
 var path = require('path');
+var fs = require('fs');
 var cookieParser = require('cookie-parser');
 var logger = require('morgan');
-const cors = require('cors');
+const createCorsMiddleware = require('./src/middlewares/cors');
 const connectDB = require('./src/config/db');
-const swaggerUi = require('swagger-ui-express');
-const swaggerSpec = require('./src/config/swagger');
 require('dotenv').config();
+
+const swaggerUiPath = path.join(__dirname, 'node_modules', 'swagger-ui-express');
+const swaggerJsdocPath = path.join(__dirname, 'node_modules', 'swagger-jsdoc');
+const hasSwaggerUi = fs.existsSync(swaggerUiPath);
+const hasSwaggerJsdoc = fs.existsSync(swaggerJsdocPath);
+const swaggerUi = hasSwaggerUi ? require('swagger-ui-express') : null;
+const swaggerSpec = hasSwaggerUi && hasSwaggerJsdoc ? require('./src/config/swagger') : null;
 
 var indexRouter = require('./routes/index');
 var usersRouter = require('./routes/users');
@@ -24,15 +30,21 @@ app.use(express.urlencoded({ extended: false }));
 app.use(cookieParser());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Enable CORS for all routes
-app.use(cors({
-  origin: '*', // Allow all origins
+// Enable CORS for all routes without relying on the external "cors" package
+app.use(createCorsMiddleware({
+  origin: '*',
   methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
   allowedHeaders: 'Content-Type, Authorization'
 }));
 
-// Swagger Documentation
-app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+// Swagger Documentation (skip if dependencies are not available)
+if (swaggerUi && swaggerSpec) {
+  app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+} else if (!hasSwaggerUi || !hasSwaggerJsdoc) {
+  console.warn('⚠️  Swagger dependencies missing - skipping /api-docs route');
+} else {
+  console.warn('⚠️  Swagger configuration unavailable - skipping /api-docs route');
+}
 
 app.use('/', indexRouter);
 app.use('/users', usersRouter);
