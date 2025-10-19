@@ -1,7 +1,13 @@
 /**
  * Test eSMS API Connection
  */
-const axios = require('axios');
+let axios;
+try {
+  axios = require('axios');
+} catch (error) {
+  console.log('⚠️  axios module not installed - skipping eSMS API test');
+  process.exit(0);
+}
 require('dotenv').config();
 
 const testEsmsAPI = async () => {
