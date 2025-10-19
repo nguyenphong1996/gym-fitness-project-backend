@@ -21,6 +21,18 @@ Backend API - Xác thực OTP qua SMS, Quản lý User Profile & Delete Account
 - `POST /api/user/account/delete/request` - Gửi OTP xác nhận xóa tài khoản (JWT required)
 - `DELETE /api/user/account/delete/confirm` - Xác nhận OTP & xóa vĩnh viễn tài khoản (JWT required)
 
+### Video Endpoints:
+- `POST /api/videos/upload` - Upload video (multipart/form-data, JWT required)
+  - Body: form-data với field `video` (file)
+  - Response: `{ video: { _id, title, thumbnail, streamingUrl, duration, views, createdAt } }`
+- `GET /api/videos` - Danh sách tất cả video (pagination hỗ trợ)
+  - Query: `?page=1&limit=10`
+  - Response: `{ videos: [...], total, page, limit }`
+- `GET /api/videos/:id` - Chi tiết video (tăng view count)
+  - Response: `{ video: { _id, title, thumbnail, streamingUrl, duration, views, createdAt } }`
+- `DELETE /api/videos/:id` - Xóa video (JWT required, admin only)
+  - Response: `{ message: "Video deleted successfully" }`
+
 ## 🐳 Docker Deployment
 
 ```bash
