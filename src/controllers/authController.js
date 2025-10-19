@@ -15,11 +15,13 @@ const { JWT_SECRET, JWT_EXPIRES_IN = '12h' } = process.env;
  * @param {OtpServiceError} err - The error thrown by the OTP service.
  * @param {string} context - The controller function name for logging.
  */
-function handleOtpError(res, err, context) {
-  logWarning(context, err.message, { code: err.code, phone: req.body.phone });
-  return res.status(err.statusCode).json({ 
-    error: err.code,
-    message: err.message 
+function handleOtpError(req, res, err, context) {
+  // Use safe access to request body for logging
+  const phone = req && req.body ? req.body.phone : undefined;
+  logWarning(context, err.message, { code: err.code, phone });
+  return res.status(err.statusCode || 500).json({ 
+    error: err.code || 'esms_error',
+    message: err.message || 'OTP service error' 
   });
 }
 
@@ -67,7 +69,7 @@ exports.register = async (req, res) => {
 
   } catch (err) {
     if (err instanceof OtpServiceError) {
-      return handleOtpError(res, err, context);
+      return handleOtpError(req, res, err, context);
     }
     logError(context, 'Lỗi không xác định khi gửi OTP', err);
     return res.status(500).json({ error: 'server_error', message: 'Failed to send OTP. Please try again.' });
@@ -125,7 +127,7 @@ exports.verifyRegister = async (req, res) => {
 
   } catch (err) {
     if (err instanceof OtpServiceError) {
-      return handleOtpError(res, err, context);
+      return handleOtpError(req, res, err, context);
     }
     logError(context, 'Lỗi không xác định khi xác thực OTP', err);
     return res.status(500).json({ error: 'server_error', message: 'Failed to verify OTP. Please try again.' });
@@ -161,7 +163,7 @@ exports.login = async (req, res) => {
 
   } catch (err) {
     if (err instanceof OtpServiceError) {
-      return handleOtpError(res, err, context);
+      return handleOtpError(req, res, err, context);
     }
     logError(context, 'Lỗi không xác định khi gửi OTP đăng nhập', err);
     return res.status(500).json({ error: 'server_error', message: 'Failed to send login OTP.' });
@@ -214,7 +216,7 @@ exports.verifyLogin = async (req, res) => {
 
   } catch (err) {
     if (err instanceof OtpServiceError) {
-      return handleOtpError(res, err, context);
+      return handleOtpError(req, res, err, context);
     }
     logError(context, 'Lỗi không xác định khi xác thực OTP đăng nhập', err);
     return res.status(500).json({ error: 'server_error', message: 'Failed to verify login OTP.' });
