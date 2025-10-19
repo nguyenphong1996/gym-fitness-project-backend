@@ -1,6 +1,6 @@
 # Gym Fitness Project Backend
 
-Backend API - Xác thực OTP qua SMS, Quản lý User Profile & Delete Account
+Backend API - Xác thực OTP qua SMS, Quản lý User Profile & Delete Account & Upload video
 
 ## 📚 API Documentation
 
