@@ -49,7 +49,7 @@ src/
 ├── routes/          # API endpoints (with Swagger docs)
 ├── services/        # SMS OTP service
 └── utils/
-    ├── logger.js    # Vietnamese logging (13 functions)
-    └── validation.js # Centralized validation utilities
+    ├── logger.js   
+    └── validation.js 
 
 ```
