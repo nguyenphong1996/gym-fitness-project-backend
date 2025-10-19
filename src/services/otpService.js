@@ -13,7 +13,10 @@ const {
   MAX_VERIFY_ATTEMPTS = 5
 } = process.env;
 
-const ESMS_SEND_URL = 'https://rest.esms.vn/MainService.svc/json/SendMessageAutoGenCode_V4_get';
+// Allow overriding SmsType via env (eSMS doc specifies SmsType=2 for OTP)
+const ESMS_SMS_TYPE = process.env.ESMS_SMS_TYPE || '2';
+
+const ESMS_SEND_URL = 'https://rest.esms.vn/MainService.svc/json/SendMultipleMessage_V4_post_json/';
 const ESMS_CHECK_URL = 'https://rest.esms.vn/MainService.svc/json/CheckCodeGen_V4_get';
 
 // Custom Error for OTP service
@@ -117,14 +120,23 @@ exports.requestOtp = async (phone, type, ip) => {
 
   // 4. Production: Send real OTP via eSMS
   logInfo('otpService.requestOtp', `Gửi OTP ${type} qua eSMS API cho: ${phone}`);
-  const response = await axios.get(ESMS_SEND_URL, {
-    params: {
-      ApiKey: ESMS_API_KEY,
-      SecretKey: ESMS_SECRET_KEY,
-      Phone: phone,
-      Content: getOtpContent(type),
-      Brandname: ESMS_BRANDNAME,
-      SmsType: 8 // SMS brandname quảng cáo
+  
+  // eSMS API requires JSON body with specific template format
+  // Note: Content must match registered template or will get error 146
+  // Format: "CODE la ma xac minh dang ky/dang nhap Brandname cua ban"
+  const otp = Math.floor(1000 + Math.random() * 9000).toString(); // Generate 4-digit OTP
+  
+  const response = await axios.post(ESMS_SEND_URL, {
+    ApiKey: ESMS_API_KEY,
+    SecretKey: ESMS_SECRET_KEY,
+    Phone: phone,
+    Content: `${otp} la ma xac minh dang ${type} ${ESMS_BRANDNAME} cua ban`,
+    Brandname: ESMS_BRANDNAME,
+    SmsType: ESMS_SMS_TYPE,
+    IsUnicode: '0'
+  }, {
+    headers: {
+      'Content-Type': 'application/json'
     },
     timeout: 10000
   });
