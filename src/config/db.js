@@ -12,7 +12,6 @@ const connectDB = async () => {
     console.log('✅ Kết nối MongoDB thành công!');
   } catch (error) {
     console.error('❌ Lỗi kết nối MongoDB:', error.message);
-    // Only exit in production, not in CI
     if (process.env.NODE_ENV === 'production') {
       process.exit(1);
     }
