@@ -33,9 +33,9 @@ USER nodejs
 # Expose port
 EXPOSE 3000
 
-# Health check
+# Health check (robust: handles connection errors and timeouts)
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-    CMD node -e "require('http').get('http://localhost:3000/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"
+    CMD node -e "const http=require('http');const options={host:'127.0.0.1',port:3000,path:'/health',timeout:2500};const req=http.get(options,res=>{process.exit(res.statusCode===200?0:1)});req.on('error',()=>process.exit(1));req.on('timeout',()=>{req.destroy();process.exit(1)})"
 
 # Start application
 CMD ["npm", "start"]
