@@ -83,17 +83,25 @@ jobs:
         JWT_SECRET: ${{ secrets.JWT_SECRET }}
         ESMS_API_KEY: ${{ secrets.ESMS_API_KEY }}
         ESMS_SECRET_KEY: ${{ secrets.ESMS_SECRET_KEY }}
+        ESMS_SANDBOX: ${{ secrets.ESMS_SANDBOX }}
+        NODE_ENV: production
+        PORT: 3000
 
     - name: Wait and check application started
       run: |
-        sleep 5
-        if lsof -Pi :3000 -sTCP:LISTEN -t >/dev/null ; then
-          echo "✅ Server started successfully on port 3000"
-          lsof -ti:3000 | xargs kill
-        else
-          echo "❌ Server failed to start"
-          exit 1
-        fi
+        for i in {1..15}; do
+          echo "Attempt $i/15: Checking if server is running on port 3000..."
+          if lsof -Pi :3000 -sTCP:LISTEN -t >/dev/null ; then
+            echo "✅ Server started successfully on port 3000"
+            sleep 2
+            curl -s http://localhost:3000/health && echo "" || echo "Health check failed"
+            lsof -ti:3000 | xargs kill -9 2>/dev/null || true
+            exit 0
+          fi
+          sleep 1
+        done
+        echo "❌ Server failed to start after 15 seconds"
+        exit 1
 
   code-quality:
     name: Code Quality Check
