@@ -155,9 +155,9 @@ const upload = multer({
  *                   properties:
  *                     id:
  *                       type: string
- *                       format: uuid
+ *                       pattern: '^[0-9a-f]{24}$'
  *                       example: "68eff234c8db2a37df681570"
- *                       description: MongoDB ObjectId
+ *                       description: MongoDB ObjectId (24 ký tự hex)
  *                     title:
  *                       type: string
  *                       example: "Full Body HIIT Workout"
@@ -352,7 +352,8 @@ router.post('/upload', adminMiddleware, upload.single('video'), uploadVideoFile)
  *                     properties:
  *                       id:
  *                         type: string
- *                         format: uuid
+ *                         pattern: '^[0-9a-f]{24}$'
+ *                         description: MongoDB ObjectId (24 ký tự hex)
  *                         example: "68eff234c8db2a37df681570"
  *                       title:
  *                         type: string
@@ -430,8 +431,8 @@ router.get('/', getAllVideos);
  *         required: true
  *         schema:
  *           type: string
- *           format: uuid
- *         description: Video ID (MongoDB ObjectId)
+ *           pattern: '^[0-9a-f]{24}$'
+ *         description: Video ID (MongoDB ObjectId - 24 ký tự hex)
  *         example: "68eff234c8db2a37df681570"
  *     responses:
  *       200:
@@ -449,7 +450,8 @@ router.get('/', getAllVideos);
  *                   properties:
  *                     id:
  *                       type: string
- *                       format: uuid
+ *                       pattern: '^[0-9a-f]{24}$'
+ *                       description: MongoDB ObjectId (24 ký tự hex)
  *                       example: "68eff234c8db2a37df681570"
  *                     title:
  *                       type: string
@@ -531,8 +533,8 @@ router.get('/', getAllVideos);
  *         required: true
  *         schema:
  *           type: string
- *           format: uuid
- *         description: Video ID (MongoDB ObjectId)
+ *           pattern: '^[0-9a-f]{24}$'
+ *         description: Video ID (MongoDB ObjectId - 24 ký tự hex)
  *         example: "68eff234c8db2a37df681570"
  *     responses:
  *       200:
