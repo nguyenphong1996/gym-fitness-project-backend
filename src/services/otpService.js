@@ -50,7 +50,7 @@ function ensureEsmsConfigured() {
  * @returns {string} The message content.
  */
 function getOtpContent(type, otp, brandName) {
-  const safeBrandName = brandName || 'dich vu';
+  const safeBrandName = brandName || 'Baotrixemay';
 
   switch (type) {
     case 'register':

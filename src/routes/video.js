@@ -5,7 +5,7 @@ const path = require('path');
 const fs = require('fs');
 const authMiddleware = require('../middlewares/authMiddleware');
 const adminMiddleware = require('../middlewares/adminMiddleware');
-const { uploadVideoFile, getAllVideos, getVideoById, deleteVideoById } = require('../controllers/videoController');
+const { uploadVideoFile, getAllVideos, getVideoById, deleteVideoById, getSubcategoriesByCategory } = require('../controllers/videoController');
 
 // Tạo thư mục tạm nếu không tồn tại
 const uploadDir = path.join('/tmp', 'gymxfit-uploads');
@@ -58,16 +58,34 @@ const upload = multer({
  *       ✅ **Yêu cầu:**
  *       - Authorization: Bearer token (Admin role)
  *       - Multipart form data với file video
- *       - Title và estimated_calories bắt buộc
+ *       - Title, estimated_calories, category, subcategory bắt buộc
  *       
  *       🎬 **Tính năng tự động:**
  *       - Duration được trích xuất tự động từ metadata video bởi Cloudinary
  *       - Thumbnail 300x200px từ frame đầu
  *       - HLS m3u8 streaming URL được tạo sẵn
+ *       - Validation: subcategory phải match category
  *       
  *       📋 **Định dạng hỗ trợ:**
  *       - MP4, MOV, WEBM
  *       - Max: 100MB
+ *       
+ *       🏷️ **Category và Subcategory:**
+ *       | Category | Subcategories |
+ *       |----------|---------------|
+ *       | **workout** | Upper Body, Lower Body, Back, Legs, Full Body, Core, Chest, Shoulders, Arms, Glutes |
+ *       | **cardio** | Running, Cycling, Jump Rope, HIIT, Dance, Swimming, Rowing, Elliptical |
+ *       | **stretching** | Flexibility, Mobility, Dynamic Stretch, Static Stretch, Yoga Stretches, Recovery |
+ *       | **nutrition** | Meal Prep, Recipes, Nutrition Tips, Supplements, Diet Plans, Hydration |
+ *       | **yoga** | Hatha Yoga, Vinyasa Yoga, Power Yoga, Yin Yoga, Ashtanga Yoga, Beginner Yoga |
+ *       | **other** | General, Tips, Motivation, Education |
+ *       
+ *       **⚡ Frontend flow:**
+ *       1. User chọn category → Call `GET /api/videos/subcategories/{category}`
+ *       2. Backend trả danh sách subcategories
+ *       3. Populate dropdown subcategory
+ *       4. User chọn subcategory + upload video
+ *       
  *     requestBody:
  *       required: true
  *       content:
@@ -78,6 +96,8 @@ const upload = multer({
  *               - video
  *               - title
  *               - estimated_calories
+ *               - category
+ *               - subcategory
  *             properties:
  *               video:
  *                 type: string
@@ -97,8 +117,25 @@ const upload = multer({
  *               category:
  *                 type: string
  *                 enum: ["workout", "nutrition", "stretching", "cardio", "yoga", "other"]
- *                 example: "cardio"
- *                 description: Loại video (mặc định "workout" nếu không ghi)
+ *                 example: "workout"
+ *                 description: |
+ *                   Loại video (bắt buộc).
+ *                   Xem bảng category-subcategory ở trên để biết subcategories phù hợp.
+ *               subcategory:
+ *                 type: string
+ *                 example: "Upper Body"
+ *                 description: |
+ *                   Chi tiết loại video (bắt buộc).
+ *                   ⚠️ **Phải match category được chọn!**
+ *                   
+ *                   Ví dụ:
+ *                   - Nếu category = "workout" → subcategory phải là: Upper Body, Lower Body, Back, Legs, Full Body, Core, Chest, Shoulders, Arms, hoặc Glutes
+ *                   - Nếu category = "cardio" → subcategory phải là: Running, Cycling, Jump Rope, HIIT, Dance, Swimming, Rowing, hoặc Elliptical
+ *                   
+ *                   🔗 **Frontend:**
+ *                   1. Khi user chọn category, call endpoint: GET /api/videos/subcategories/{category}
+ *                   2. Parse response data.subcategories
+ *                   3. Populate dropdown subcategory với danh sách này
  *     responses:
  *       201:
  *         description: Upload thành công - Video sẵn sàng phát stream
@@ -134,6 +171,9 @@ const upload = multer({
  *                     category:
  *                       type: string
  *                       example: "cardio"
+ *                     subcategory:
+ *                       type: string
+ *                       example: "HIIT"
  *       400:
  *         description: Bad Request - Dữ liệu không hợp lệ
  *         content:
@@ -242,6 +282,53 @@ router.post('/upload', adminMiddleware, upload.single('video'), uploadVideoFile)
  *         description: Lọc theo loại video
  *         example: "cardio"
  *       - in: query
+ *         name: subcategory
+ *         schema:
+ *           type: string
+ *           enum: 
+ *             - "Upper Body"
+ *             - "Lower Body"
+ *             - "Back"
+ *             - "Legs"
+ *             - "Full Body"
+ *             - "Core"
+ *             - "Chest"
+ *             - "Shoulders"
+ *             - "Arms"
+ *             - "Glutes"
+ *             - "Running"
+ *             - "Cycling"
+ *             - "Jump Rope"
+ *             - "HIIT"
+ *             - "Dance"
+ *             - "Swimming"
+ *             - "Rowing"
+ *             - "Elliptical"
+ *             - "Flexibility"
+ *             - "Mobility"
+ *             - "Dynamic Stretch"
+ *             - "Static Stretch"
+ *             - "Yoga Stretches"
+ *             - "Recovery"
+ *             - "Meal Prep"
+ *             - "Recipes"
+ *             - "Nutrition Tips"
+ *             - "Supplements"
+ *             - "Diet Plans"
+ *             - "Hydration"
+ *             - "Hatha Yoga"
+ *             - "Vinyasa Yoga"
+ *             - "Power Yoga"
+ *             - "Yin Yoga"
+ *             - "Ashtanga Yoga"
+ *             - "Beginner Yoga"
+ *             - "General"
+ *             - "Tips"
+ *             - "Motivation"
+ *             - "Education"
+ *         description: Lọc theo chi tiết loại video
+ *         example: "Upper Body"
+ *       - in: query
  *         name: search
  *         schema:
  *           type: string
@@ -286,6 +373,9 @@ router.post('/upload', adminMiddleware, upload.single('video'), uploadVideoFile)
  *                       category:
  *                         type: string
  *                         example: "cardio"
+ *                       subcategory:
+ *                         type: string
+ *                         example: "upper_body"
  *                       views:
  *                         type: number
  *                         description: Số lượt xem
@@ -385,6 +475,9 @@ router.get('/', getAllVideos);
  *                     category:
  *                       type: string
  *                       example: "cardio"
+ *                     subcategory:
+ *                       type: string
+ *                       example: "upper_body"
  *                     views:
  *                       type: number
  *                       description: Số lượt xem (auto increment)
@@ -507,5 +600,57 @@ router.get('/', getAllVideos);
  */
 router.get('/:id', getVideoById);
 router.delete('/:id', adminMiddleware, deleteVideoById);
+
+/**
+ * @swagger
+ * /api/videos/subcategories/{category}:
+ *   get:
+ *     summary: Lấy danh sách subcategories theo category
+ *     operationId: getSubcategoriesByCategory
+ *     tags: [Videos]
+ *     description: Lấy danh sách subcategories phù hợp với category được chọn. Dùng để populate dropdown khi tạo/upload video.
+ *     parameters:
+ *       - in: path
+ *         name: category
+ *         required: true
+ *         schema:
+ *           type: string
+ *           enum: ["workout", "nutrition", "stretching", "cardio", "yoga", "other"]
+ *         description: Loại video
+ *         example: "workout"
+ *     responses:
+ *       200:
+ *         description: Danh sách subcategories thành công
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 category:
+ *                   type: string
+ *                   example: "workout"
+ *                 subcategories:
+ *                   type: array
+ *                   items:
+ *                     type: string
+ *                   example: ["Upper Body", "Lower Body", "Back", "Legs", "Full Body", "Core", "Chest", "Shoulders", "Arms", "Glutes"]
+ *       400:
+ *         description: Category không hợp lệ
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: false
+ *                 message:
+ *                   type: string
+ *                   example: "Invalid category"
+ */
+router.get('/subcategories/:category', getSubcategoriesByCategory);
 
 module.exports = router;
