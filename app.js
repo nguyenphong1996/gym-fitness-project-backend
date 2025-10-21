@@ -19,6 +19,9 @@ var usersRouter = require('./routes/users');
 var authRouter = require('./src/routes/auth');
 var userRouter = require('./src/routes/user');
 var videoRouter = require('./src/routes/video');
+var staffRouter = require('./src/routes/staff');
+var classRouter = require('./src/routes/class');
+var enrollmentRouter = require('./src/routes/enrollment');
 const mongoose = require('mongoose');
 
 var app = express();
@@ -51,6 +54,9 @@ app.use('/users', usersRouter);
 app.use('/api/auth', authRouter);
 app.use('/api/user', userRouter);
 app.use('/api/videos', videoRouter);
+app.use('/api/admin/staff', staffRouter);
+app.use('/api/admin/classes', classRouter);
+app.use('/api/customer', enrollmentRouter);
 
 // Health check endpoint for Docker / orchestrator
 app.get('/health', async (req, res) => {
