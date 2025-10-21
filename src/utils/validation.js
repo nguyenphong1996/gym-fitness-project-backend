@@ -391,3 +391,170 @@ exports.validateProfileUpdate = (data) => {
     data: validated
   };
 };
+
+/**
+ * Validate skills array (for PT)
+ * Must be array with valid skill values
+ * Skills must match video categories: workout, cardio, stretching, nutrition, yoga, other
+ */
+exports.validateSkills = (skills, options = {}) => {
+  const { required = false } = options;
+  const ALLOWED_SKILLS = ['workout', 'cardio', 'stretching', 'nutrition', 'yoga', 'other'];
+  
+  if (!skills) {
+    if (required) {
+      return { valid: false, error: 'missing_skills', message: 'Skills are required' };
+    }
+    return { valid: true, skills: [] };
+  }
+  
+  if (!Array.isArray(skills)) {
+    return { valid: false, error: 'invalid_skills_type', message: 'Skills must be an array' };
+  }
+  
+  if (skills.length === 0) {
+    if (required) {
+      return { valid: false, error: 'empty_skills', message: 'At least one skill is required' };
+    }
+    return { valid: true, skills: [] };
+  }
+  
+  // Check for duplicates
+  const uniqueSkills = [...new Set(skills)];
+  if (uniqueSkills.length !== skills.length) {
+    return { valid: false, error: 'duplicate_skills', message: 'Duplicate skills detected' };
+  }
+  
+  // Check if all skills are valid
+  const invalidSkills = skills.filter(s => !ALLOWED_SKILLS.includes(s));
+  if (invalidSkills.length > 0) {
+    return {
+      valid: false,
+      error: 'invalid_skills_value',
+      message: `Invalid skills: ${invalidSkills.join(', ')}. Allowed: ${ALLOWED_SKILLS.join(', ')}`
+    };
+  }
+  
+  return { valid: true, skills: uniqueSkills };
+};
+
+/**
+ * Validate PT (Staff) creation request
+ * Combines phone, name, email, skills, and profile fields validation
+ */
+exports.validateCreateStaffRequest = (data) => {
+  const errors = [];
+  const validated = {};
+  
+  // Phone - REQUIRED
+  const phoneValidation = exports.validatePhone(data.phone);
+  if (!phoneValidation.valid) {
+    errors.push({
+      field: 'phone',
+      error: phoneValidation.error,
+      message: phoneValidation.message
+    });
+  } else {
+    validated.phone = phoneValidation.phone;
+  }
+  
+  // Name - REQUIRED
+  const nameValidation = exports.validateName(data.name, { required: true, minLength: 2, maxLength: 100 });
+  if (!nameValidation.valid) {
+    errors.push({
+      field: 'name',
+      error: nameValidation.error,
+      message: nameValidation.message
+    });
+  } else {
+    validated.name = nameValidation.name;
+  }
+  
+  // Email - OPTIONAL
+  if (data.email) {
+    const emailValidation = exports.validateEmail(data.email, { required: false, maxLength: 100 });
+    if (!emailValidation.valid) {
+      errors.push({
+        field: 'email',
+        error: emailValidation.error,
+        message: emailValidation.message
+      });
+    } else if (emailValidation.email) {
+      validated.email = emailValidation.email;
+    }
+  }
+  
+  // Skills - REQUIRED
+  const skillsValidation = exports.validateSkills(data.skills, { required: true });
+  if (!skillsValidation.valid) {
+    errors.push({
+      field: 'skills',
+      error: skillsValidation.error,
+      message: skillsValidation.message
+    });
+  } else {
+    validated.skills = skillsValidation.skills;
+  }
+  
+  // Gender - OPTIONAL
+  if (data.gender) {
+    const genderValidation = exports.validateGender(data.gender);
+    if (!genderValidation.valid) {
+      errors.push({
+        field: 'gender',
+        error: genderValidation.error,
+        message: genderValidation.message
+      });
+    } else if (genderValidation.gender) {
+      validated.gender = genderValidation.gender;
+    }
+  }
+  
+  // DOB - OPTIONAL
+  if (data.dob) {
+    const dobValidation = exports.validateDob(data.dob, { required: false });
+    if (!dobValidation.valid) {
+      errors.push({
+        field: 'dob',
+        error: dobValidation.error,
+        message: dobValidation.message
+      });
+    } else if (dobValidation.dob) {
+      validated.dob = dobValidation.dob;
+    }
+  }
+  
+  // Height - OPTIONAL
+  if (data.height !== undefined && data.height !== null && data.height !== '') {
+    const heightValidation = exports.validateHeight(data.height, { required: false, min: 100, max: 250 });
+    if (!heightValidation.valid) {
+      errors.push({
+        field: 'height',
+        error: heightValidation.error,
+        message: heightValidation.message
+      });
+    } else if (heightValidation.height) {
+      validated.height = heightValidation.height;
+    }
+  }
+  
+  // Weight - OPTIONAL
+  if (data.weight !== undefined && data.weight !== null && data.weight !== '') {
+    const weightValidation = exports.validateWeight(data.weight, { required: false, min: 30, max: 200 });
+    if (!weightValidation.valid) {
+      errors.push({
+        field: 'weight',
+        error: weightValidation.error,
+        message: weightValidation.message
+      });
+    } else if (weightValidation.weight) {
+      validated.weight = weightValidation.weight;
+    }
+  }
+  
+  return {
+    valid: errors.length === 0,
+    data: validated,
+    errors
+  };
+};
