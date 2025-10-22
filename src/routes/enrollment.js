@@ -9,7 +9,7 @@ const adminMiddleware = require('../middlewares/adminMiddleware');
  * @swagger
  * tags:
  *   name: Class Enrollment
- *   description: Customer enrollment management
+ *   description: Customer đăng ký và quản lý lớp học đã đăng ký
  */
 
 // Customer endpoints
@@ -155,6 +155,245 @@ const adminMiddleware = require('../middlewares/adminMiddleware');
  *                   type: string
  */
 router.post('/classes/:classId/enroll', authMiddleware, enrollmentController.enrollClass);
+
+/**
+ * @swagger
+ * /api/customer/classes/search:
+ *   get:
+ *     tags: [Class Enrollment]
+ *     summary: 🔍 Tìm kiếm lớp học có sẵn
+ *     operationId: searchClasses
+ *     description: |
+ *       Tìm kiếm các lớp học đang mở đăng ký cho customer.
+ *
+ *       ✅ **Khả năng tìm kiếm:**
+ *       - Filter theo danh mục (category): workout, cardio, yoga, etc.
+ *       - Filter theo địa điểm (location)
+ *       - Filter theo khoảng thời gian (startDate, endDate)
+ *       - Search theo tên lớp, mô tả, địa điểm
+ *       - Phân trang và sắp xếp linh hoạt
+ *
+ *       🔑 **Thông tin trả về:**
+ *       - Thông tin chi tiết lớp học
+ *       - Số chỗ trống còn lại
+ *       - Thông tin PT giảng dạy
+ *       - Đã đăng ký hay chưa (nếu đã login)
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: category
+ *         schema:
+ *           type: string
+ *           enum: [workout, cardio, stretching, nutrition, yoga, other]
+ *         description: Filter theo danh mục lớp học
+ *         example: "yoga"
+ *       - in: query
+ *         name: location
+ *         schema:
+ *           type: string
+ *         description: Filter theo địa điểm (tìm kiếm tương đối)
+ *         example: "Hà Nội"
+ *       - in: query
+ *         name: startDate
+ *         schema:
+ *           type: string
+ *           format: date-time
+ *         description: Lớp bắt đầu từ thời điểm này (ISO 8601)
+ *         example: "2025-10-25T00:00:00Z"
+ *       - in: query
+ *         name: endDate
+ *         schema:
+ *           type: string
+ *           format: date-time
+ *         description: Lớp bắt đầu đến thời điểm này (ISO 8601)
+ *         example: "2025-10-31T23:59:59Z"
+ *       - in: query
+ *         name: search
+ *         schema:
+ *           type: string
+ *         description: Tìm kiếm theo tên lớp, mô tả, địa điểm, danh mục con
+ *         example: "yoga buổi sáng"
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *           default: 1
+ *         description: Số trang
+ *         example: 1
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *           maximum: 50
+ *           default: 10
+ *         description: Số lớp học mỗi trang
+ *         example: 10
+ *       - in: query
+ *         name: sortBy
+ *         schema:
+ *           type: string
+ *           enum: [startTime, endTime, createdAt, name, capacity, currentEnrollment]
+ *           default: startTime
+ *         description: Sắp xếp theo trường
+ *         example: "startTime"
+ *       - in: query
+ *         name: sortOrder
+ *         schema:
+ *           type: string
+ *           enum: [asc, desc]
+ *           default: asc
+ *         description: Thứ tự sắp xếp
+ *         example: "asc"
+ *     responses:
+ *       200:
+ *         description: Tìm kiếm lớp học thành công
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 message:
+ *                   type: string
+ *                   example: "Classes found successfully"
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       classId:
+ *                         type: string
+ *                         example: "58f5c0eb2a6d0c1a8f9b4c2e"
+ *                       name:
+ *                         type: string
+ *                         example: "Yoga Buổi Sáng"
+ *                       category:
+ *                         type: string
+ *                         example: "yoga"
+ *                       subcategory:
+ *                         type: string
+ *                         example: "Vinyasa Flow"
+ *                       description:
+ *                         type: string
+ *                         example: "Lớp yoga nhẹ nhàng cho người mới bắt đầu"
+ *                       location:
+ *                         type: string
+ *                         example: "Phòng 101 - Tầng 2"
+ *                       capacity:
+ *                         type: integer
+ *                         example: 20
+ *                       currentEnrollment:
+ *                         type: integer
+ *                         example: 8
+ *                       availableSpots:
+ *                         type: integer
+ *                         example: 12
+ *                       isFull:
+ *                         type: boolean
+ *                         example: false
+ *                       startTime:
+ *                         type: string
+ *                         format: date-time
+ *                         example: "2025-10-25T07:00:00Z"
+ *                       endTime:
+ *                         type: string
+ *                         format: date-time
+ *                         example: "2025-10-25T08:00:00Z"
+ *                       status:
+ *                         type: string
+ *                         example: "scheduled"
+ *                       instructor:
+ *                         type: object
+ *                         properties:
+ *                           staffId:
+ *                             type: string
+ *                           name:
+ *                             type: string
+ *                             example: "PT Nguyễn Văn A"
+ *                           email:
+ *                             type: string
+ *                             example: "pt.na@example.com"
+ *                           skills:
+ *                             type: array
+ *                             items:
+ *                               type: string
+ *                             example: ["yoga", "meditation"]
+ *                       isEnrolledByUser:
+ *                         type: boolean
+ *                         description: User đã đăng ký lớp này chưa (chỉ có khi login)
+ *                         example: false
+ *                 pagination:
+ *                   type: object
+ *                   properties:
+ *                     total:
+ *                       type: integer
+ *                       example: 45
+ *                     page:
+ *                       type: integer
+ *                       example: 1
+ *                     limit:
+ *                       type: integer
+ *                       example: 10
+ *                     pages:
+ *                       type: integer
+ *                       example: 5
+ *                 filters:
+ *                   type: object
+ *                   properties:
+ *                     category:
+ *                       type: string
+ *                       example: "yoga"
+ *                     location:
+ *                       type: string
+ *                       example: "Hà Nội"
+ *                     search:
+ *                       type: string
+ *                       example: "yoga buổi sáng"
+ *       400:
+ *         description: Bad Request - Parameter không hợp lệ
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: false
+ *                 message:
+ *                   type: string
+ *                   example: "Invalid category. Must be one of: workout, cardio, stretching, nutrition, yoga, other"
+ *       401:
+ *         description: Unauthorized - Token không hợp lệ hoặc hết hạn
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "Unauthorized"
+ *       500:
+ *         description: Server Error - Lỗi hệ thống
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: false
+ *                 message:
+ *                   type: string
+ *                   example: "Failed to search classes"
+ *                 error:
+ *                   type: string
+ */
+router.get('/classes/search', authMiddleware, enrollmentController.searchClasses);
 
 /**
  * @swagger
