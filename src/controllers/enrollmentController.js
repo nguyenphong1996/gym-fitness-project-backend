@@ -327,6 +327,208 @@ exports.cancelEnrollment = async (req, res) => {
 };
 
 /**
+ * @description Tìm kiếm lớp học có sẵn cho customer
+ */
+exports.searchClasses = async (req, res) => {
+  try {
+    const {
+      category,
+      status = 'scheduled',
+      location,
+      startDate,
+      endDate,
+      search,
+      page = 1,
+      limit = 10,
+      sortBy = 'startTime',
+      sortOrder = 'asc'
+    } = req.query;
+
+    // Build filter cho class
+    const filter = {};
+
+    // Chỉ hiển thị các lớp đã mở đăng ký (scheduled)
+    if (status) {
+      if (!['scheduled'].includes(status)) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid status. For searching, only "scheduled" classes are available'
+        });
+      }
+      filter.status = status;
+    }
+
+    // Filter theo category
+    if (category) {
+      if (!['workout', 'cardio', 'stretching', 'nutrition', 'yoga', 'other'].includes(category)) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid category. Must be one of: workout, cardio, stretching, nutrition, yoga, other'
+        });
+      }
+      filter.category = category;
+    }
+
+    // Filter theo location
+    if (location) {
+      filter.location = { $regex: location, $options: 'i' };
+    }
+
+    // Filter theo khoảng thời gian
+    if (startDate || endDate) {
+      filter.startTime = {};
+      if (startDate) {
+        const start = new Date(startDate);
+        if (isNaN(start.getTime())) {
+          return res.status(400).json({
+            success: false,
+            message: 'Invalid startDate format. Use ISO 8601 format.'
+          });
+        }
+        filter.startTime.$gte = start;
+      }
+      if (endDate) {
+        const end = new Date(endDate);
+        if (isNaN(end.getTime())) {
+          return res.status(400).json({
+            success: false,
+            message: 'Invalid endDate format. Use ISO 8601 format.'
+          });
+        }
+        filter.startTime.$lte = end;
+      }
+    } else {
+      // Mặc định chỉ hiển thị các lớp trong tương lai
+      filter.startTime = { $gte: new Date() };
+    }
+
+    // Search theo tên class, description, location
+    if (search) {
+      filter.$or = [
+        { name: { $regex: search, $options: 'i' } },
+        { description: { $regex: search, $options: 'i' } },
+        { location: { $regex: search, $options: 'i' } },
+        { subcategory: { $regex: search, $options: 'i' } }
+      ];
+    }
+
+    // Build sort
+    const sortOptions = {};
+    const validSortFields = ['startTime', 'endTime', 'createdAt', 'name', 'capacity', 'currentEnrollment'];
+    const validSortOrders = ['asc', 'desc'];
+
+    if (!validSortFields.includes(sortBy)) {
+      return res.status(400).json({
+        success: false,
+        message: `Invalid sortBy field. Must be one of: ${validSortFields.join(', ')}`
+      });
+    }
+
+    if (!validSortOrders.includes(sortOrder)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid sortOrder. Must be either "asc" or "desc"'
+      });
+    }
+
+    sortOptions[sortBy] = sortOrder === 'asc' ? 1 : -1;
+
+    // Pagination
+    const pageNum = parseInt(page);
+    const limitNum = parseInt(limit);
+    const skip = (pageNum - 1) * limitNum;
+
+    if (pageNum < 1 || limitNum < 1 || limitNum > 50) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid pagination. Page must be ≥ 1, limit must be between 1 and 50'
+      });
+    }
+
+    // Fetch classes với populate staff
+    const classes = await Class.find(filter)
+      .populate('staffId', 'name email skills')
+      .sort(sortOptions)
+      .skip(skip)
+      .limit(limitNum);
+
+    const total = await Class.countDocuments(filter);
+
+    // Nếu customer đã đăng nhập, kiểm tra các lớp đã đăng ký
+    const userId = req.user?.id;
+    let enrolledClassIds = [];
+
+    if (userId) {
+      const enrollments = await Enrollment.find({
+        userId,
+        status: { $in: ['active', 'completed'] }
+      }).select('classId');
+      enrolledClassIds = enrollments.map(e => e.classId.toString());
+    }
+
+    // Format response
+    const formattedClasses = classes.map(classItem => {
+      const isEnrolled = userId ? enrolledClassIds.includes(classItem._id.toString()) : false;
+      const availableSpots = classItem.capacity - classItem.currentEnrollment;
+
+      return {
+        classId: classItem._id,
+        name: classItem.name,
+        category: classItem.category,
+        subcategory: classItem.subcategory,
+        description: classItem.description,
+        location: classItem.location,
+        capacity: classItem.capacity,
+        currentEnrollment: classItem.currentEnrollment,
+        availableSpots: Math.max(0, availableSpots),
+        isFull: availableSpots <= 0,
+        startTime: classItem.startTime,
+        endTime: classItem.endTime,
+        status: classItem.status,
+        instructor: classItem.staffId ? {
+          staffId: classItem.staffId._id,
+          name: classItem.staffId.name,
+          email: classItem.staffId.email,
+          skills: classItem.staffId.skills
+        } : null,
+        createdAt: classItem.createdAt,
+        isEnrolledByUser: isEnrolled
+      };
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: 'Classes found successfully',
+      data: formattedClasses,
+      pagination: {
+        total,
+        page: pageNum,
+        limit: limitNum,
+        pages: Math.ceil(total / limitNum)
+      },
+      filters: {
+        category,
+        status,
+        location,
+        startDate,
+        endDate,
+        search,
+        sortBy,
+        sortOrder
+      }
+    });
+
+  } catch (error) {
+    logger.error('Error in searchClasses:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Internal server error',
+      error: error.message
+    });
+  }
+};
+
+/**
  * @description Lấy danh sách enrollments của một class (admin only)
  */
 exports.getClassEnrollments = async (req, res) => {
