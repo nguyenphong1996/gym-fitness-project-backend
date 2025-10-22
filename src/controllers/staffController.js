@@ -63,7 +63,7 @@ exports.createStaff = async (req, res) => {
       email: email || undefined,
       role: 'staff',
       skills,
-      skillsApprovedByAdmin: false,  // ← Skills cần admin approve
+      skillsApprovedByAdmin: true,   // ← Admin đã xác nhận skills khi tạo
       isActive: true,                // ← Account bật mặc định
       isVerified: false,             // ← Chưa login lần nào (OTP required)
       gender: gender || undefined,
