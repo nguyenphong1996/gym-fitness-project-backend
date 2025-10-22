@@ -42,11 +42,10 @@ const {
  *       1. Admin tạo tài khoản (không cần OTP)
  *       2. PT account tạo xong, isVerified = false
  *       3. Khi PT login lần đầu → cần OTP
- *       4. Skills cần admin approve trước khi PT được gán vào lớp
+ *       4. Skills được auto-approve khi admin tạo (vì admin đã xác nhận)
  *       
  *       📋 **Skills (chuyên môn PT):**
  *       - workout, cardio, stretching, nutrition, yoga, other
- *       - Phải match với Category của Video
  *       
  *     requestBody:
  *       required: true
@@ -81,7 +80,7 @@ const {
  *                   type: string
  *                   enum: ['workout', 'cardio', 'stretching', 'nutrition', 'yoga', 'other']
  *                 minItems: 1
- *                 example: ["Yoga", "CrossFit"]
+ *                 example: ["yoga", "stretching"]
  *                 description: |
  *                   Chuyên môn của PT (bắt buộc, ít nhất 1)
  *                   - workout: Tập luyện thể hình
@@ -148,11 +147,11 @@ const {
  *                       type: array
  *                       items:
  *                         type: string
- *                       example: ["Yoga", "CrossFit"]
+ *                       example: ["yoga", "stretching"]
  *                     skillsApprovedByAdmin:
  *                       type: boolean
- *                       example: false
- *                       description: Skills cần admin approve
+ *                       example: true
+ *                       description: Skills đã được admin approve (auto-approve khi tạo)
  *                     isActive:
  *                       type: boolean
  *                       example: true
@@ -313,9 +312,40 @@ router.post('/create', authMiddleware, adminMiddleware, createStaff);
  *                     pages:
  *                       type: number
  *       401:
- *         description: Unauthorized
+ *         description: Unauthorized - Token không hợp lệ hoặc hết hạn
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "Unauthorized"
  *       403:
- *         description: Forbidden - Admin only
+ *         description: Forbidden - Chỉ admin mới được truy cập
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "Forbidden - Admin access required"
+ *       500:
+ *         description: Server error - Lỗi hệ thống
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: false
+ *                 message:
+ *                   type: string
+ *                   example: "Failed to get staff list"
+ *                 error:
+ *                   type: string
  */
 router.get('/', authMiddleware, adminMiddleware, getStaffList);
 
@@ -339,7 +369,7 @@ router.get('/', authMiddleware, adminMiddleware, getStaffList);
  *         example: "58f5c0eb2a6d0c1a8f9b4c2e"
  *     responses:
  *       200:
- *         description: Chi tiết PT
+ *         description: Lấy chi tiết PT thành công
  *         content:
  *           application/json:
  *             schema:
@@ -347,14 +377,110 @@ router.get('/', authMiddleware, adminMiddleware, getStaffList);
  *               properties:
  *                 success:
  *                   type: boolean
+ *                   example: true
  *                 staff:
  *                   type: object
+ *                   properties:
+ *                     id:
+ *                       type: string
+ *                       example: "58f5c0eb2a6d0c1a8f9b4c2e"
+ *                     phone:
+ *                       type: string
+ *                       example: "0912345678"
+ *                     name:
+ *                       type: string
+ *                       example: "Phạm Thế Vũ"
+ *                     email:
+ *                       type: string
+ *                       example: "vupham@gmail.com"
+ *                     role:
+ *                       type: string
+ *                       example: "staff"
+ *                     skills:
+ *                       type: array
+ *                       items:
+ *                         type: string
+ *                       example: ["yoga", "stretching"]
+ *                     skillsApprovedByAdmin:
+ *                       type: boolean
+ *                       example: true
+ *                       description: Skills đã được admin approve
+ *                     isActive:
+ *                       type: boolean
+ *                       example: true
+ *                     isVerified:
+ *                       type: boolean
+ *                       example: false
+ *                       description: PT đã login lần đầu chưa
+ *                     gender:
+ *                       type: string
+ *                       example: "male"
+ *                     dob:
+ *                       type: string
+ *                       format: date
+ *                       example: "1995-01-15"
+ *                     height:
+ *                       type: number
+ *                       example: 180
+ *                     weight:
+ *                       type: number
+ *                       example: 75
+ *                     hireDate:
+ *                       type: string
+ *                       format: date-time
+ *                       example: "2025-10-21T10:30:00Z"
+ *                     createdAt:
+ *                       type: string
+ *                       format: date-time
+ *                       example: "2025-10-21T10:30:00Z"
  *       404:
- *         description: PT not found
+ *         description: PT not found - Không tìm thấy PT
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: false
+ *                 message:
+ *                   type: string
+ *                   example: "PT not found"
  *       401:
- *         description: Unauthorized
+ *         description: Unauthorized - Token không hợp lệ hoặc hết hạn
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "Unauthorized"
  *       403:
- *         description: Forbidden
+ *         description: Forbidden - Chỉ admin mới được truy cập
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "Forbidden - Admin access required"
+ *       500:
+ *         description: Server error - Lỗi hệ thống
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: false
+ *                 message:
+ *                   type: string
+ *                   example: "Failed to get PT detail"
+ *                 error:
+ *                   type: string
  */
 router.get('/:staffId', authMiddleware, adminMiddleware, getStaffDetail);
 
@@ -376,13 +502,78 @@ router.get('/:staffId', authMiddleware, adminMiddleware, getStaffDetail);
  *           pattern: '^[0-9a-f]{24}$'
  *     responses:
  *       200:
- *         description: PT account activated
+ *         description: Kích hoạt tài khoản PT thành công
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 message:
+ *                   type: string
+ *                   example: "PT account activated"
+ *                 staff:
+ *                   type: object
+ *                   properties:
+ *                     id:
+ *                       type: string
+ *                       example: "58f5c0eb2a6d0c1a8f9b4c2e"
+ *                     phone:
+ *                       type: string
+ *                       example: "0912345678"
+ *                     isActive:
+ *                       type: boolean
+ *                       example: true
  *       404:
- *         description: PT not found
+ *         description: PT not found - Không tìm thấy PT
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: false
+ *                 message:
+ *                   type: string
+ *                   example: "PT not found"
  *       401:
- *         description: Unauthorized
+ *         description: Unauthorized - Token không hợp lệ hoặc hết hạn
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "Unauthorized"
  *       403:
- *         description: Forbidden
+ *         description: Forbidden - Chỉ admin mới được truy cập
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "Forbidden - Admin access required"
+ *       500:
+ *         description: Server error - Lỗi hệ thống
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: false
+ *                 message:
+ *                   type: string
+ *                   example: "Failed to activate PT account"
+ *                 error:
+ *                   type: string
  */
 router.patch('/:staffId/activate', authMiddleware, adminMiddleware, activateStaff);
 
@@ -404,13 +595,78 @@ router.patch('/:staffId/activate', authMiddleware, adminMiddleware, activateStaf
  *           pattern: '^[0-9a-f]{24}$'
  *     responses:
  *       200:
- *         description: PT account deactivated
+ *         description: Vô hiệu hóa tài khoản PT thành công
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 message:
+ *                   type: string
+ *                   example: "PT account deactivated"
+ *                 staff:
+ *                   type: object
+ *                   properties:
+ *                     id:
+ *                       type: string
+ *                       example: "58f5c0eb2a6d0c1a8f9b4c2e"
+ *                     phone:
+ *                       type: string
+ *                       example: "0912345678"
+ *                     isActive:
+ *                       type: boolean
+ *                       example: false
  *       404:
- *         description: PT not found
+ *         description: PT not found - Không tìm thấy PT
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: false
+ *                 message:
+ *                   type: string
+ *                   example: "PT not found"
  *       401:
- *         description: Unauthorized
+ *         description: Unauthorized - Token không hợp lệ hoặc hết hạn
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "Unauthorized"
  *       403:
- *         description: Forbidden
+ *         description: Forbidden - Chỉ admin mới được truy cập
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "Forbidden - Admin access required"
+ *       500:
+ *         description: Server error - Lỗi hệ thống
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: false
+ *                 message:
+ *                   type: string
+ *                   example: "Failed to deactivate PT account"
+ *                 error:
+ *                   type: string
  */
 router.patch('/:staffId/deactivate', authMiddleware, adminMiddleware, deactivateStaff);
 
@@ -435,7 +691,7 @@ router.patch('/:staffId/deactivate', authMiddleware, adminMiddleware, deactivate
  *           pattern: '^[0-9a-f]{24}$'
  *     responses:
  *       200:
- *         description: PT skills approved
+ *         description: Xác nhận skills PT thành công
  *         content:
  *           application/json:
  *             schema:
@@ -452,21 +708,67 @@ router.patch('/:staffId/deactivate', authMiddleware, adminMiddleware, deactivate
  *                   properties:
  *                     id:
  *                       type: string
+ *                       example: "58f5c0eb2a6d0c1a8f9b4c2e"
  *                     phone:
  *                       type: string
+ *                       example: "0912345678"
  *                     skills:
  *                       type: array
  *                       items:
  *                         type: string
+ *                       example: ["yoga", "stretching"]
  *                     skillsApprovedByAdmin:
  *                       type: boolean
  *                       example: true
+ *                       description: Skills đã được admin approve
  *       404:
- *         description: PT not found
+ *         description: PT not found - Không tìm thấy PT
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: false
+ *                 message:
+ *                   type: string
+ *                   example: "PT not found"
  *       401:
- *         description: Unauthorized
+ *         description: Unauthorized - Token không hợp lệ hoặc hết hạn
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "Unauthorized"
  *       403:
- *         description: Forbidden
+ *         description: Forbidden - Chỉ admin mới được truy cập
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "Forbidden - Admin access required"
+ *       500:
+ *         description: Server error - Lỗi hệ thống
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: false
+ *                 message:
+ *                   type: string
+ *                   example: "Failed to approve PT skills"
+ *                 error:
+ *                   type: string
  */
 router.patch('/:staffId/skills/approve', authMiddleware, adminMiddleware, approveStaffSkills);
 
