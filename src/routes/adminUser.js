@@ -17,11 +17,14 @@ const { getUserList, getUserDetail } = require('../controllers/adminUserControll
  * @swagger
  * /api/admin/users:
  *   get:
- *     summary: Lấy danh sách user (Admin only)
+ *     summary: Lấy danh sách customer (Admin only)
  *     operationId: adminGetUserList
  *     tags: [Admin - Users]
  *     security:
  *       - bearerAuth: []
+ *     description: |
+ *       Trả về danh sách **customer** (role = customer) dùng cho trang quản trị người dùng.
+ *       Endpoint này không trả về tài khoản admin hoặc PT.
  *     parameters:
  *       - in: query
  *         name: page
@@ -39,23 +42,11 @@ const { getUserList, getUserDetail } = require('../controllers/adminUserControll
  *           default: 20
  *         description: Số lượng user mỗi trang
  *       - in: query
- *         name: role
- *         schema:
- *           type: string
- *           enum: [admin, staff, customer]
- *         description: Lọc theo role của user
- *       - in: query
  *         name: isVerified
  *         schema:
  *           type: string
  *           enum: ['true', 'false']
  *         description: Lọc theo trạng thái xác thực
- *       - in: query
- *         name: isActive
- *         schema:
- *           type: string
- *           enum: ['true', 'false']
- *         description: Lọc theo trạng thái kích hoạt (đặc biệt cho staff)
  *       - in: query
  *         name: search
  *         schema:
@@ -98,11 +89,14 @@ router.get('/', authMiddleware, adminMiddleware, getUserList);
  * @swagger
  * /api/admin/users/{userId}:
  *   get:
- *     summary: Lấy chi tiết một user (Admin only)
+ *     summary: Lấy chi tiết một customer (Admin only)
  *     operationId: adminGetUserDetail
  *     tags: [Admin - Users]
  *     security:
  *       - bearerAuth: []
+ *     description: |
+ *       Trả về chi tiết **customer** (role = customer). 
+ *       Nếu user không phải customer sẽ trả về lỗi 404.
  *     parameters:
  *       - in: path
  *         name: userId
@@ -131,7 +125,7 @@ router.get('/', authMiddleware, adminMiddleware, getUserList);
  *       403:
  *         description: Chỉ admin mới được truy cập
  *       404:
- *         description: User không tồn tại
+ *         description: Customer không tồn tại
  */
 router.get('/:userId', authMiddleware, adminMiddleware, getUserDetail);
 
