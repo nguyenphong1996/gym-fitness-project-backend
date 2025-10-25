@@ -74,6 +74,10 @@ const deleteResource = async (cloudinary_id, resource_type = 'image') => {
   }
 };
 
+const deleteVideo = async (cloudinary_id) => {
+  await deleteResource(cloudinary_id, 'video');
+};
+
 const getThumbnailUrl = (cloudinary_id) => {
   return cloudinary.url(cloudinary_id, {
     resource_type: 'video',
@@ -97,6 +101,7 @@ module.exports = {
   uploadImage, 
   uploadVideo, 
   deleteResource, 
+  deleteVideo,
   getThumbnailUrl, 
   getStreamingUrl 
 };
