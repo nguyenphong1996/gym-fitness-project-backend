@@ -9,7 +9,8 @@ const testMongoConnection = async () => {
     console.log('🔍 Testing MongoDB connection...');
     
     if (!process.env.MONGO_URI) {
-      throw new Error('❌ MONGO_URI not found in environment variables');
+      console.warn('⚠️  MONGO_URI not found in environment variables. Skipping MongoDB connection test.');
+      process.exit(0);
     }
 
     await mongoose.connect(process.env.MONGO_URI);

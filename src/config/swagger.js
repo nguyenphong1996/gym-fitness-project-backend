@@ -13,6 +13,10 @@ const options = {
         url: 'https://be.phongnguyen.software',
         description: 'Production server'
       },
+      {
+        url: 'http://localhost:3000',
+        description: 'Local server'
+      }
     ],
     components: {
       securitySchemes: {
@@ -59,6 +63,91 @@ const options = {
             isVerified: {
               type: 'boolean',
               example: true
+            },
+            createdAt: {
+              type: 'string',
+              format: 'date-time'
+            },
+            updatedAt: {
+              type: 'string',
+              format: 'date-time'
+            }
+          }
+        },
+        AdminUserInfo: {
+          type: 'object',
+          properties: {
+            id: {
+              type: 'string',
+              example: '64f0c1c2a1b2c3d4e5f60789'
+            },
+            phone: {
+              type: 'string',
+              example: '0912345678'
+            },
+            name: {
+              type: 'string',
+              nullable: true,
+              example: 'Nguyen Van A'
+            },
+            email: {
+              type: 'string',
+              nullable: true,
+              example: 'user@example.com'
+            },
+            role: {
+              type: 'string',
+              enum: ['admin', 'staff', 'customer'],
+              example: 'customer'
+            },
+            isVerified: {
+              type: 'boolean',
+              example: true
+            },
+            isActive: {
+              type: 'boolean',
+              nullable: true,
+              example: true
+            },
+            avatar: {
+              type: 'string',
+              nullable: true,
+              example: 'https://res.cloudinary.com/demo/image/upload/sample.jpg'
+            },
+            gender: {
+              type: 'string',
+              nullable: true,
+              enum: ['male', 'female', 'other'],
+              example: 'male'
+            },
+            dob: {
+              type: 'string',
+              format: 'date',
+              nullable: true,
+              example: '1990-01-01'
+            },
+            weight: {
+              type: 'number',
+              nullable: true,
+              example: 70
+            },
+            height: {
+              type: 'number',
+              nullable: true,
+              example: 175
+            },
+            skills: {
+              type: 'array',
+              items: {
+                type: 'string'
+              },
+              example: ['yoga', 'cardio']
+            },
+            hireDate: {
+              type: 'string',
+              format: 'date',
+              nullable: true,
+              example: '2024-01-15'
             },
             createdAt: {
               type: 'string',
