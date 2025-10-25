@@ -6,22 +6,12 @@ const { logDebug, logSuccess, logError, logWarning } = require('../utils/logger'
 /**
  * Build query filters for admin user listing.
  */
-function buildUserFilters({ role, search, isVerified, isActive }) {
-  const filters = {};
-
-  if (role && ['admin', 'staff', 'customer'].includes(role)) {
-    filters.role = role;
-  }
+function buildUserFilters({ search, isVerified }) {
+  const filters = { role: 'customer' };
 
   if (typeof isVerified === 'string') {
     if (['true', 'false'].includes(isVerified)) {
       filters.isVerified = isVerified === 'true';
-    }
-  }
-
-  if (typeof isActive === 'string') {
-    if (['true', 'false'].includes(isActive)) {
-      filters.isActive = isActive === 'true';
     }
   }
 
@@ -82,7 +72,7 @@ exports.getUserList = async (req, res) => {
     const { page, limit } = normalizePagination(req.query.page, req.query.limit);
     const filters = buildUserFilters(req.query);
 
-    logDebug(context, 'Admin yêu cầu danh sách user', {
+    logDebug(context, 'Admin yêu cầu danh sách customer', {
       adminId: req.user?._id || req.user?.id,
       filters,
       page,
@@ -101,7 +91,7 @@ exports.getUserList = async (req, res) => {
       User.countDocuments(filters)
     ]);
 
-    logSuccess(context, `Lấy danh sách user thành công (${users.length}/${total})`, {
+    logSuccess(context, `Lấy danh sách customer thành công (${users.length}/${total})`, {
       page,
       limit
     });
@@ -160,7 +150,15 @@ exports.getUserDetail = async (req, res) => {
       });
     }
 
-    logSuccess(context, `Lấy thông tin user thành công: ${user.phone}`, { userId });
+    if (user.role !== 'customer') {
+      logWarning(context, 'Không phải customer', { userId, role: user.role });
+      return res.status(404).json({
+        success: false,
+        message: 'Customer not found'
+      });
+    }
+
+    logSuccess(context, `Lấy thông tin customer thành công: ${user.phone}`, { userId });
 
     return res.json({
       success: true,
