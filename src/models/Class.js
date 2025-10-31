@@ -71,7 +71,9 @@ const classSchema = new mongoose.Schema({
   // QR Code cho check-in
   qrCode: {
     url: { type: String, trim: true },
-    cloudinary_id: { type: String, trim: true }
+    cloudinary_id: { type: String, trim: true },
+    value: { type: String, trim: true },
+    generatedAt: { type: Date }
   },
   
   // Người tạo

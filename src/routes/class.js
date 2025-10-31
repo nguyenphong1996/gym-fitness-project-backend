@@ -10,6 +10,7 @@ const {
   openClass,
   closeClass,
   deleteClass,
+  generateClassQRCode,
   getClassQRCode
 } = require('../controllers/classController');
 
@@ -1071,6 +1072,136 @@ router.patch('/:classId/close', authMiddleware, adminMiddleware, closeClass);
  *                   type: string
  */
 router.delete('/:classId', authMiddleware, adminMiddleware, deleteClass);
+
+/**
+ * @swagger
+ * /api/admin/classes/{classId}/qrcode:
+ *   post:
+ *     summary: Tạo QR code check-in/out cho lớp học (Admin only)
+ *     operationId: generateClassQRCode
+ *     tags: [Classes (Admin)]
+ *     security:
+ *       - bearerAuth: []
+ *     description: |
+ *       Tạo mới hoặc làm mới mã QR code cho lớp học, dùng để điểm danh check-in/out.
+ *
+ *       🔐 **Quy tắc:**
+ *       - Chỉ tạo được khi lớp đang ở trạng thái `scheduled` hoặc `ongoing`.
+ *       - QR code cũ (nếu có) sẽ bị thay thế và xóa khỏi Cloudinary.
+ *       - Payload bên trong QR code chứa `classId`, `token` ngẫu nhiên và dấu thời gian tạo.
+ *     parameters:
+ *       - in: path
+ *         name: classId
+ *         required: true
+ *         schema:
+ *           type: string
+ *           pattern: '^[0-9a-f]{24}$'
+ *         description: ID lớp học (MongoDB ObjectId)
+ *         example: "507f1f77bcf86cd799439013"
+ *     responses:
+ *       201:
+ *         description: QR code tạo thành công
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 message:
+ *                   type: string
+ *                   example: "QR code generated successfully"
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     classId:
+ *                       type: string
+ *                       example: "507f1f77bcf86cd799439013"
+ *                     className:
+ *                       type: string
+ *                       example: "Yoga Buổi Sáng"
+ *                     qrCode:
+ *                       type: object
+ *                       properties:
+ *                         url:
+ *                           type: string
+ *                           example: "https://res.cloudinary.com/demo/qrcode/sample.png"
+ *                         cloudinary_id:
+ *                           type: string
+ *                           example: "gymxfit/class-qrcodes/class_507f1f77_qrcode"
+ *                         value:
+ *                           type: string
+ *                           description: Chuỗi payload (JSON) được encode trong QR code
+ *                         generatedAt:
+ *                           type: string
+ *                           format: date-time
+ *       400:
+ *         description: Yêu cầu không hợp lệ (classId sai, trạng thái lớp không phù hợp)
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: false
+ *                 error:
+ *                   type: string
+ *                   example: "invalid_class_status"
+ *                 message:
+ *                   type: string
+ *                   example: "QR code can only be generated for classes that are scheduled or ongoing"
+ *       401:
+ *         description: Unauthorized - Token không hợp lệ hoặc hết hạn
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "Unauthorized"
+ *       403:
+ *         description: Forbidden - Chỉ admin mới có quyền tạo QR code
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "Forbidden - Admin access required"
+ *       404:
+ *         description: Không tìm thấy lớp học
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: false
+ *                 message:
+ *                   type: string
+ *                   example: "Class not found"
+ *       500:
+ *         description: Server Error - Lỗi khi tạo hoặc upload QR code
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: false
+ *                 message:
+ *                   type: string
+ *                   example: "Failed to generate class QR code"
+ *                 error:
+ *                   type: string
+ */
+router.post('/:classId/qrcode', authMiddleware, adminMiddleware, generateClassQRCode);
 
 /**
  * @swagger

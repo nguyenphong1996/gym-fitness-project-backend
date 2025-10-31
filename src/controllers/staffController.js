@@ -1,8 +1,10 @@
 // controllers/staffController.js
 
+const fs = require('fs').promises;
 const User = require('../models/User');
 const { validateCreateStaffRequest } = require('../utils/validation');
-const { logError, logSuccess, logWarning, logDebug, logAuth } = require('../utils/logger');
+const { uploadImage, deleteResource } = require('../utils/cloudinary');
+const { logError, logSuccess, logWarning, logDebug, logAuth, logUserAction, logAvatarUpload } = require('../utils/logger');
 
 /**
  * Create PT (Staff) account
@@ -346,11 +348,135 @@ exports.approveStaffSkills = async (req, res) => {
   }
 };
 
+/**
+ * Update PT avatar (Admin or PT self-service)
+ * PUT /api/admin/staff/:staffId/avatar
+ */
+exports.updateStaffAvatar = async (req, res) => {
+  const context = 'staffController.updateStaffAvatar';
+  const tempPath = req.file?.path;
+  let staff;
+  let requester;
+
+  try {
+    const { staffId } = req.params;
+
+    if (!req.file) {
+      return res.status(400).json({
+        success: false,
+        error: 'file_missing',
+        message: 'No image file provided'
+      });
+    }
+
+    if (!staffId || !/^[0-9a-fA-F]{24}$/.test(staffId)) {
+      return res.status(400).json({
+        success: false,
+        error: 'invalid_staff_id',
+        message: 'Invalid staffId'
+      });
+    }
+
+    requester = await User.findById(req.user.id).select('_id role phone');
+    if (!requester) {
+      return res.status(401).json({
+        success: false,
+        error: 'unauthorized',
+        message: 'Requester not found'
+      });
+    }
+
+    staff = await User.findById(staffId);
+    if (!staff || staff.role !== 'staff') {
+      return res.status(404).json({
+        success: false,
+        error: 'staff_not_found',
+        message: 'PT not found'
+      });
+    }
+
+    const isAdmin = requester.role === 'admin';
+    const isSelf = requester.role === 'staff' && requester._id.equals(staff._id);
+
+    if (!isAdmin && !isSelf) {
+      return res.status(403).json({
+        success: false,
+        error: 'forbidden',
+        message: 'Only admin or the PT owner can update this avatar'
+      });
+    }
+
+    logAvatarUpload('pending', {
+      phone: staff.phone,
+      fileName: req.file.originalname,
+      fileSize: req.file.size
+    });
+
+    logAvatarUpload('processing', { phone: staff.phone });
+
+    const { url, cloudinary_id } = await uploadImage(tempPath);
+
+    const oldCloudinaryId = staff.avatar?.cloudinary_id;
+    if (oldCloudinaryId) {
+      await deleteResource(oldCloudinaryId, 'image');
+    }
+
+    staff.avatar = { url, cloudinary_id };
+    await staff.save();
+
+    logAvatarUpload('completed', {
+      phone: staff.phone,
+      cloudinary_id,
+      url,
+      oldCloudinaryId
+    });
+
+    logUserAction(staff._id, 'Cập nhật avatar PT', {
+      updatedBy: requester._id,
+      updatedByAdmin: isAdmin
+    });
+
+    logSuccess(context, `Cập nhật avatar PT thành công: ${staff.phone}`, {
+      staffId: staff._id,
+      updatedBy: requester._id,
+      updatedByAdmin: isAdmin
+    });
+
+    return res.json({
+      success: true,
+      message: 'Avatar updated successfully',
+      staff: {
+        id: staff._id,
+        avatar: staff.avatar.url,
+        updatedByAdmin: isAdmin
+      }
+    });
+  } catch (error) {
+    logAvatarUpload('failed', {
+      phone: staff?.phone,
+      fileName: req.file?.originalname,
+      error: error.message
+    });
+
+    logError(context, 'Lỗi khi cập nhật avatar PT', error);
+    return res.status(500).json({
+      success: false,
+      error: 'server_error',
+      message: 'Failed to update PT avatar'
+    });
+  } finally {
+    if (tempPath) {
+      await fs.unlink(tempPath).catch(err => logWarning(context, `Không thể xóa file tạm: ${tempPath}`, err));
+    }
+  }
+};
+
 module.exports = {
   createStaff: exports.createStaff,
   getStaffList: exports.getStaffList,
   getStaffDetail: exports.getStaffDetail,
   activateStaff: exports.activateStaff,
   deactivateStaff: exports.deactivateStaff,
-  approveStaffSkills: exports.approveStaffSkills
+  approveStaffSkills: exports.approveStaffSkills,
+  updateStaffAvatar: exports.updateStaffAvatar
 };
