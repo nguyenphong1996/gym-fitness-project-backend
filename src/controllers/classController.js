@@ -1,3 +1,5 @@
+const crypto = require('crypto');
+const QRCode = require('qrcode');
 const Class = require('../models/Class');
 const User = require('../models/User');
 const {
@@ -5,6 +7,7 @@ const {
   validateUpdateClassRequest,
   validateObjectId
 } = require('../utils/validation');
+const { uploadImageBuffer, deleteResource } = require('../utils/cloudinary');
 const {
   logError,
   logSuccess,
@@ -433,6 +436,108 @@ exports.deleteClass = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Internal server error'
+    });
+  }
+};
+
+/**
+ * Generate class QR Code for check-in/out
+ * POST /api/admin/classes/:classId/qrcode
+ */
+exports.generateClassQRCode = async (req, res) => {
+  const context = 'classController.generateClassQRCode';
+  try {
+    logDebug(context, `Tạo QR code cho lớp học: ${req.params.classId}`, {
+      admin: req.user?._id
+    });
+
+    const classIdValidation = validateObjectId(req.params.classId, { required: true, fieldName: 'Class ID' });
+    if (!classIdValidation.valid) {
+      return res.status(400).json({
+        success: false,
+        error: classIdValidation.error || 'invalid_class_id',
+        message: classIdValidation.message
+      });
+    }
+
+    const classData = await Class.findById(classIdValidation.id);
+    if (!classData) {
+      logWarning(context, `Lớp học không tồn tại: ${classIdValidation.id}`);
+      return res.status(404).json({
+        success: false,
+        error: 'class_not_found',
+        message: 'Class not found'
+      });
+    }
+
+    if (!['scheduled', 'ongoing'].includes(classData.status)) {
+      logWarning(context, `Không thể tạo QR code cho lớp với trạng thái: ${classData.status}`, {
+        classId: classData._id
+      });
+      return res.status(400).json({
+        success: false,
+        error: 'invalid_class_status',
+        message: 'QR code can only be generated for classes that are scheduled or ongoing'
+      });
+    }
+
+    const randomToken = crypto.randomBytes(24).toString('hex');
+    const generatedAt = new Date();
+    const payload = JSON.stringify({
+      classId: classData._id.toString(),
+      token: randomToken,
+      type: 'class_check',
+      generatedAt: generatedAt.toISOString()
+    });
+
+    const qrBuffer = await QRCode.toBuffer(payload, {
+      errorCorrectionLevel: 'M',
+      type: 'png',
+      margin: 2,
+      width: 512
+    });
+
+    const oldCloudinaryId = classData.qrCode?.cloudinary_id;
+    if (oldCloudinaryId) {
+      await deleteResource(oldCloudinaryId, 'image');
+    }
+
+    const uploadResult = await uploadImageBuffer(qrBuffer, {
+      folder: 'gymxfit/class-qrcodes',
+      public_id: `class_${classData._id}_qrcode`,
+      overwrite: true,
+      format: 'png',
+      transformation: [{ fetch_format: 'auto' }]
+    });
+
+    classData.qrCode = {
+      url: uploadResult.url,
+      cloudinary_id: uploadResult.cloudinary_id,
+      value: payload,
+      generatedAt
+    };
+    await classData.save();
+
+    logSuccess(context, `Tạo QR code thành công cho lớp: ${classData.name}`, {
+      classId: classData._id,
+      cloudinary_id: uploadResult.cloudinary_id
+    });
+
+    return res.status(201).json({
+      success: true,
+      message: 'QR code generated successfully',
+      data: {
+        classId: classData._id,
+        className: classData.name,
+        qrCode: classData.qrCode
+      }
+    });
+  } catch (error) {
+    logError(context, 'Lỗi khi tạo QR code cho lớp học', error);
+    return res.status(500).json({
+      success: false,
+      error: 'server_error',
+      message: 'Failed to generate class QR code'
     });
   }
 };

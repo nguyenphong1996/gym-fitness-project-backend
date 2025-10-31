@@ -33,6 +33,51 @@ const uploadImage = async (filePath) => {
 };
 
 /**
+ * Upload an image buffer (useful for dynamically generated assets like QR codes)
+ * @param {Buffer} buffer
+ * @param {object} options
+ * @returns {Promise<object>}
+ */
+const uploadImageBuffer = async (buffer, options = {}) => {
+  const {
+    folder = 'gymxfit/avatars',
+    public_id,
+    overwrite = true,
+    format = 'png'
+  } = options;
+
+  return new Promise((resolve, reject) => {
+    logInfo('cloudinary', `Uploading image buffer to folder ${folder}`);
+
+    const uploadOptions = {
+      resource_type: 'image',
+      folder,
+      overwrite,
+      format,
+      public_id,
+      transformation: options.transformation || [
+        { fetch_format: 'auto' }
+      ]
+    };
+
+    const stream = cloudinary.uploader.upload_stream(uploadOptions, (error, result) => {
+      if (error) {
+        logError('cloudinary', 'Image buffer upload failed', error);
+        return reject(error);
+      }
+
+      logSuccess('cloudinary', `Image buffer uploaded: ${result.public_id}`);
+      resolve({
+        cloudinary_id: result.public_id,
+        url: result.secure_url
+      });
+    });
+
+    stream.end(buffer);
+  });
+};
+
+/**
  * Uploads a video file to Cloudinary for HLS streaming.
  * @param {string} filePath - The local path to the video file.
  * @returns {Promise<object>} Object containing details of the uploaded video.
@@ -99,6 +144,7 @@ const getStreamingUrl = (cloudinary_id) => {
 
 module.exports = { 
   uploadImage, 
+  uploadImageBuffer,
   uploadVideo, 
   deleteResource, 
   deleteVideo,

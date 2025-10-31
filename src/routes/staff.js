@@ -2,6 +2,9 @@
 
 const express = require('express');
 const router = express.Router();
+const multer = require('multer');
+const path = require('path');
+const fs = require('fs');
 const authMiddleware = require('../middlewares/authMiddleware');
 const adminMiddleware = require('../middlewares/adminMiddleware');
 const {
@@ -10,8 +13,37 @@ const {
   getStaffDetail,
   activateStaff,
   deactivateStaff,
-  approveStaffSkills
+  approveStaffSkills,
+  updateStaffAvatar
 } = require('../controllers/staffController');
+
+// --- Multer configuration for staff avatar uploads ---
+const uploadDir = path.join('/tmp', 'gymxfit-avatars');
+if (!fs.existsSync(uploadDir)) {
+  fs.mkdirSync(uploadDir, { recursive: true });
+}
+
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => cb(null, uploadDir),
+  filename: (req, file, cb) => {
+    const targetId = req.params.staffId || req.user?.id || 'staff';
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+    cb(null, `${targetId}-${uniqueSuffix}${path.extname(file.originalname)}`);
+  }
+});
+
+const upload = multer({
+  storage,
+  fileFilter: (req, file, cb) => {
+    const allowedMimes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/jpg'];
+    if (allowedMimes.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Invalid file type. Only JPG, PNG, GIF, WEBP files are allowed.'), false);
+    }
+  },
+  limits: { fileSize: 5 * 1024 * 1024 } // 5 MB limit
+});
 
 /**
  * @swagger
@@ -483,6 +515,148 @@ router.get('/', authMiddleware, adminMiddleware, getStaffList);
  *                   type: string
  */
 router.get('/:staffId', authMiddleware, adminMiddleware, getStaffDetail);
+
+/**
+ * @swagger
+ * /api/admin/staff/{staffId}/avatar:
+ *   put:
+ *     summary: Upload hoặc cập nhật avatar cho PT
+ *     operationId: updateStaffAvatar
+ *     tags: [Staff (PT)]
+ *     security:
+ *       - bearerAuth: []
+ *     description: |
+ *       Cho phép admin cập nhật avatar cho PT hoặc PT tự upload avatar của chính mình.
+ *       - File ảnh phải gửi dưới dạng `multipart/form-data` với field `avatar`.
+ *       - Định dạng hỗ trợ: JPG, PNG, GIF, WEBP. Kích thước tối đa 5MB.
+ *       - Avatar cũ (nếu có) sẽ bị xóa khỏi Cloudinary sau khi upload thành công.
+ *       - PT có thể sử dụng endpoint này nếu cung cấp đúng `staffId` của chính mình.
+ *     parameters:
+ *       - in: path
+ *         name: staffId
+ *         required: true
+ *         description: ID của PT cần cập nhật avatar
+ *         schema:
+ *           type: string
+ *           pattern: '^[0-9a-fA-F]{24}$'
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             required: [avatar]
+ *             properties:
+ *               avatar:
+ *                 type: string
+ *                 format: binary
+ *                 description: "File ảnh đại diện (JPG, PNG, GIF, WEBP - tối đa 5MB)"
+ *     responses:
+ *       200:
+ *         description: Cập nhật avatar thành công
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 message:
+ *                   type: string
+ *                   example: "Avatar updated successfully"
+ *                 staff:
+ *                   type: object
+ *                   properties:
+ *                     id:
+ *                       type: string
+ *                       example: "58f5c0eb2a6d0c1a8f9b4c2e"
+ *                     avatar:
+ *                       type: string
+ *                       format: uri
+ *                       example: "https://res.cloudinary.com/.../avatar.jpg"
+ *                     updatedByAdmin:
+ *                       type: boolean
+ *                       example: true
+ *       400:
+ *         description: Thiếu file hoặc staffId không hợp lệ
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: false
+ *                 error:
+ *                   type: string
+ *                   example: "file_missing"
+ *                 message:
+ *                   type: string
+ *                   example: "No image file provided"
+ *       401:
+ *         description: Không xác thực được người dùng
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
+ *                   example: "unauthorized"
+ *                 message:
+ *                   type: string
+ *                   example: "No token provided. Please login first."
+ *       403:
+ *         description: Không có quyền cập nhật avatar cho PT này
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: false
+ *                 error:
+ *                   type: string
+ *                   example: "forbidden"
+ *                 message:
+ *                   type: string
+ *                   example: "Only admin or the PT owner can update this avatar"
+ *       404:
+ *         description: Không tìm thấy PT
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: false
+ *                 error:
+ *                   type: string
+ *                   example: "staff_not_found"
+ *                 message:
+ *                   type: string
+ *                   example: "PT not found"
+ *       500:
+ *         description: Lỗi hệ thống khi upload avatar
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: false
+ *                 error:
+ *                   type: string
+ *                   example: "server_error"
+ *                 message:
+ *                   type: string
+ *                   example: "Failed to update PT avatar"
+ */
+router.put('/:staffId/avatar', authMiddleware, upload.single('avatar'), updateStaffAvatar);
 
 /**
  * @swagger

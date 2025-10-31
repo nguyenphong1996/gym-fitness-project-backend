@@ -20,6 +20,7 @@ var authRouter = require('./src/routes/auth');
 var userRouter = require('./src/routes/user');
 var videoRouter = require('./src/routes/video');
 var staffRouter = require('./src/routes/staff');
+var adminUserRouter = require('./src/routes/adminUser');
 var classRouter = require('./src/routes/class');
 var enrollmentRouter = require('./src/routes/enrollment');
 const mongoose = require('mongoose');
@@ -55,6 +56,7 @@ app.use('/api/auth', authRouter);
 app.use('/api/user', userRouter);
 app.use('/api/videos', videoRouter);
 app.use('/api/admin/staff', staffRouter);
+app.use('/api/admin/users', adminUserRouter);
 app.use('/api/admin/classes', classRouter);
 app.use('/api/customer', enrollmentRouter);
 
@@ -81,5 +83,4 @@ app.get('/health', async (req, res) => {
 });
 
 module.exports = app;
-
 
