@@ -574,7 +574,7 @@ router.get('/:classId', authMiddleware, adminMiddleware, getClassDetail);
  *       - capacity: 1-100
  *       - category: workout, cardio, stretching, nutrition, yoga, other
  *       - startTime/endTime: ISO 8601, duration ≥ 15 minutes
- *       - staffId: phải là PT active, đã được admin approve skills và có skill khớp category lớp
+ *       - staffId: phải là PT active, đã được admin approve skills và có skill khớp category lớp (ưu tiên category mới nếu được cập nhật)
  *       - Không được cập nhật status qua endpoint này
  *     parameters:
  *       - in: path
@@ -643,7 +643,7 @@ router.get('/:classId', authMiddleware, adminMiddleware, getClassDetail);
  *                 message:
  *                   type: string
  *                   example: "Class updated successfully"
- *                 class:
+ *                 data:
  *                   type: object
  *                   properties:
  *                     id:

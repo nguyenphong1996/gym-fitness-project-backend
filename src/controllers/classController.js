@@ -271,6 +271,9 @@ exports.updateClass = async (req, res) => {
 
     const updateData = validation.data;
     const targetCategory = updateData.category || classData.category;
+    const normalizedTargetCategory = targetCategory
+      ? targetCategory.toString().toLowerCase()
+      : null;
 
     // Validate new staff if provided
     if (updateData.staffId) {
@@ -291,7 +294,7 @@ exports.updateClass = async (req, res) => {
         });
       }
 
-      if (!staff.skillsApprovedByAdmin) {
+      if (staff.skillsApprovedByAdmin !== true) {
         logWarning('classController.updateClass', `PT chưa được admin approve skills: ${staff.phone}`);
         return res.status(400).json({
           success: false,
@@ -311,9 +314,10 @@ exports.updateClass = async (req, res) => {
         ? staff.skills.map((skill) => skill.toString().toLowerCase())
         : [];
 
-      if (!staffSkills.includes(targetCategory)) {
+      if (!normalizedTargetCategory || !staffSkills.includes(normalizedTargetCategory)) {
         logWarning('classController.updateClass', `PT không có kỹ năng phù hợp category: ${staff.phone}`, {
-          requiredCategory: targetCategory,
+          requiredCategory: normalizedTargetCategory,
+          originalCategory: targetCategory,
           staffSkills
         });
         return res.status(400).json({
