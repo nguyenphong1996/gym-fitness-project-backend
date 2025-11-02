@@ -26,6 +26,7 @@ const UserSchema = new mongoose.Schema({
   },
   skillsApprovedByAdmin: { type: Boolean, default: false }, // Admin phải approve skills
   isActive: { type: Boolean, default: true }, // Kích hoạt/vô hiệu hóa tài khoản
+  deactivatedAt: { type: Date }, // Thời điểm vô hiệu hóa (nếu có)
   certifications: [{
     name: { type: String },
     issueDate: { type: Date },

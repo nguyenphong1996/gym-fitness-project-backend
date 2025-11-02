@@ -275,11 +275,9 @@ router.put('/avatar', authMiddleware, upload.single('avatar'), userController.up
  * @swagger
  * /api/user/account/delete/request:
  *   post:
- *     summary: Yêu cầu xóa tài khoản - Gửi OTP xác nhận
+ *     summary: Yêu cầu vô hiệu hóa tài khoản - Gửi OTP xác nhận
  *     description: |
- *       **⚠️ CẢNH BÁO: TÍNH NĂNG NGUY HIỂM**
- *       
- *       Bước 1 của quy trình xóa tài khoản. API sẽ gửi mã OTP đến số điện thoại để xác nhận.
+ *       Bước 1 của quy trình vô hiệu hóa tài khoản. API sẽ gửi mã OTP đến số điện thoại để xác nhận.
  *     tags: [User]
  *     security:
  *       - bearerAuth: []
@@ -323,11 +321,11 @@ router.post('/account/delete/request', authMiddleware, userController.requestDel
  * @swagger
  * /api/user/account/delete/confirm:
  *   delete:
- *     summary: Xác nhận xóa tài khoản - PERMANENT DELETE
+ *     summary: Xác nhận vô hiệu hóa tài khoản
  *     description: |
- *       **⚠️ CẢNH BÁO: HÀNH ĐỘNG KHÔNG THỂ HOÀN TÁC ⚠️**
+ *       **⚠️ CẢNH BÁO: TÀI KHOẢN SẼ BỊ VÔ HIỆU HÓA ⚠️**
  *       
- *       Bước 2 của quy trình xóa tài khoản. Xác thực OTP để xóa vĩnh viễn tài khoản.
+ *       Bước 2 của quy trình vô hiệu hóa tài khoản. Xác thực OTP để khóa tài khoản khách hàng.
  *     tags: [User]
  *     security:
  *       - bearerAuth: []
@@ -342,14 +340,14 @@ router.post('/account/delete/request', authMiddleware, userController.requestDel
  *               code: { type: string, example: "1234", description: "Mã OTP 4 chữ số" }
  *     responses:
  *       200:
- *         description: Tài khoản đã bị xóa thành công
+ *         description: Tài khoản đã bị vô hiệu hóa thành công
  *         content:
  *           application/json:
  *             schema:
  *               type: object
  *               properties:
  *                 ok: { type: boolean, example: true }
- *                 message: { type: string, example: "Account deleted successfully" }
+ *                 message: { type: string, example: "Account deactivated successfully" }
  *       400:
  *         description: Validation error hoặc OTP không hợp lệ
  *         content:
@@ -359,7 +357,7 @@ router.post('/account/delete/request', authMiddleware, userController.requestDel
  *               properties:
  *                 error:
  *                   type: string
- *                   enum: [missing_otp, invalid_otp_format, no_otp_request, otp_expired, invalid_otp]
+ *                   enum: [missing_otp, invalid_otp_format, no_otp_request, otp_expired, invalid_otp, account_already_deactivated]
  *                 message:
  *                   type: string
  *       401:
