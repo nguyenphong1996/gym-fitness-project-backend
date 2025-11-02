@@ -233,7 +233,7 @@ exports.getClassDetail = async (req, res) => {
 /**
  * Update class information
  * PATCH /api/admin/classes/:classId
- * Body: { name?, category?, subcategory?, capacity?, startTime?, endTime?, description?, location? }
+ * Body: { name?, category?, subcategory?, capacity?, startTime?, endTime?, description?, location?, staffId? }
  */
 exports.updateClass = async (req, res) => {
   try {
@@ -258,14 +258,8 @@ exports.updateClass = async (req, res) => {
       });
     }
 
-    // Find and update class
-    const classData = await Class.findByIdAndUpdate(
-      classIdValidation.id,
-      { $set: validation.data },
-      { new: true, runValidators: true }
-    )
-      .populate('staffId', 'phone name skills')
-      .populate('createdBy', 'phone name');
+    // Find class
+    const classData = await Class.findById(classIdValidation.id);
 
     if (!classData) {
       logWarning('classController.updateClass', `Lớp học không tồn tại: ${classIdValidation.id}`);
@@ -274,6 +268,68 @@ exports.updateClass = async (req, res) => {
         message: 'Class not found'
       });
     }
+
+    const updateData = validation.data;
+    const targetCategory = updateData.category || classData.category;
+
+    // Validate new staff if provided
+    if (updateData.staffId) {
+      const staff = await User.findById(updateData.staffId);
+      if (!staff) {
+        logWarning('classController.updateClass', `PT không tồn tại: ${updateData.staffId}`);
+        return res.status(404).json({
+          success: false,
+          message: 'Staff not found'
+        });
+      }
+
+      if (staff.role !== 'staff') {
+        logWarning('classController.updateClass', `Người dùng không phải PT: ${staff.phone} (role: ${staff.role})`);
+        return res.status(400).json({
+          success: false,
+          message: 'Selected user is not a staff member'
+        });
+      }
+
+      if (!staff.skillsApprovedByAdmin) {
+        logWarning('classController.updateClass', `PT chưa được admin approve skills: ${staff.phone}`);
+        return res.status(400).json({
+          success: false,
+          message: 'Staff skills have not been approved by admin'
+        });
+      }
+
+      if (!staff.isActive) {
+        logWarning('classController.updateClass', `PT không hoạt động: ${staff.phone}`);
+        return res.status(400).json({
+          success: false,
+          message: 'Staff is not active'
+        });
+      }
+
+      const staffSkills = Array.isArray(staff.skills)
+        ? staff.skills.map((skill) => skill.toString().toLowerCase())
+        : [];
+
+      if (!staffSkills.includes(targetCategory)) {
+        logWarning('classController.updateClass', `PT không có kỹ năng phù hợp category: ${staff.phone}`, {
+          requiredCategory: targetCategory,
+          staffSkills
+        });
+        return res.status(400).json({
+          success: false,
+          message: 'Staff does not have required skill for this class category'
+        });
+      }
+    }
+
+    classData.set(updateData);
+    await classData.save();
+
+    await classData.populate([
+      { path: 'staffId', select: 'phone name skills skillsApprovedByAdmin' },
+      { path: 'createdBy', select: 'phone name' }
+    ]);
 
     logSuccess('classController.updateClass', `Cập nhật lớp học thành công: ${classData.name}`);
 

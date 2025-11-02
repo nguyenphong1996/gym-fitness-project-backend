@@ -44,7 +44,8 @@ Backend API - Xác thực OTP qua SMS, Quản lý User Profile, Class Management
 - `GET /api/admin/classes/{classId}` - Xem chi tiết lớp học (JWT admin required)
   - Response: `{ data: { _id, name, category, capacity, currentEnrollment, status, staffId, qrCode?, ... } }`
 - `PATCH /api/admin/classes/{classId}` - Cập nhật thông tin lớp học (JWT admin required)
-  - Body: `{ name?, category?, capacity?, startTime?, endTime?, description?, location? }`
+  - Body: `{ name?, category?, capacity?, startTime?, endTime?, description?, location?, staffId? }`
+  - Ghi chú: Khi gửi `staffId`, hệ thống kiểm tra PT tồn tại, active, đã được duyệt kỹ năng và có skill phù hợp với category lớp.
 - `PATCH /api/admin/classes/{classId}/open` - Mở lớp để nhận đăng ký (JWT admin required)
 - `PATCH /api/admin/classes/{classId}/close` - Đóng lớp học (JWT admin required)
   - Body: `{ reason: "completed" | "cancelled" }`
