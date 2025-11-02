@@ -200,29 +200,29 @@ exports.confirmDeleteAccount = async (req, res) => {
       return res.status(404).json({ error: 'user_not_found', message: 'User not found' });
     }
 
-    logWarning(context, `⚠️ ĐỌC XÁC NHẬN XÓA TÀI KHOẢN từ: ${user.phone}`);
+    if (!user.isActive) {
+      return res.status(400).json({ error: 'account_already_deactivated', message: 'Account is already deactivated.' });
+    }
+
+    logWarning(context, `⚠️ ĐỌC XÁC NHẬN VÔ HIỆU HÓA TÀI KHOẢN từ: ${user.phone}`);
 
     const isVerified = await otpService.verifyOtp(user.phone, otp, 'delete_account');
 
     if (isVerified) {
       const userId = user._id;
       const userPhone = user.phone;
-      const avatarCloudinaryId = user.avatar?.cloudinary_id;
 
-      // Delete avatar from cloudinary before deleting user
-      if (avatarCloudinaryId) {
-        await deleteResource(avatarCloudinaryId, 'image');
-      }
-
-      await User.findByIdAndDelete(userId);
+      user.isActive = false;
+      user.deactivatedAt = new Date();
+      await user.save();
 
       const OtpLog = require('../models/OtpLog');
       await OtpLog.deleteMany({ phone: userPhone });
 
-      logWarning(context, `🗑️ XÓA VĨNH VIỄN TÀI KHOẢN: ${userPhone} | User ID: ${userId}`);
-      logUserAction(userId, 'XÓA TÀI KHOẢN VĨNH VIỄN', { phone: userPhone });
+      logWarning(context, `🔒 VÔ HIỆU HÓA TÀI KHOẢN: ${userPhone} | User ID: ${userId}`);
+      logUserAction(userId, 'VÔ HIỆU HÓA TÀI KHOẢN', { phone: userPhone });
 
-      return res.json({ ok: true, message: 'Account deleted successfully' });
+      return res.json({ ok: true, message: 'Account deactivated successfully' });
     }
 
     return res.status(400).json({ error: 'invalid_otp', message: 'Invalid OTP code.' });
@@ -231,7 +231,7 @@ exports.confirmDeleteAccount = async (req, res) => {
     if (err instanceof OtpServiceError) {
       return handleOtpError(res, err, context, user?.phone);
     }
-    logError(context, 'Lỗi không xác định khi xác thực OTP xóa tài khoản', err);
-    return res.status(500).json({ error: 'server_error', message: 'Failed to delete account' });
+    logError(context, 'Lỗi không xác định khi xác thực OTP vô hiệu hóa tài khoản', err);
+    return res.status(500).json({ error: 'server_error', message: 'Failed to deactivate account' });
   }
 };

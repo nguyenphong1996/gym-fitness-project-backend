@@ -18,8 +18,8 @@ Backend API - Xác thực OTP qua SMS, Quản lý User Profile, Class Management
 - `PUT /api/user/profile` - Cập nhật profile: name, email, avatarUrl, gender, dob, weight, height (JWT required)
 
 ### Delete Account Endpoints:
-- `POST /api/user/account/delete/request` - Gửi OTP xác nhận xóa tài khoản (JWT required)
-- `DELETE /api/user/account/delete/confirm` - Xác nhận OTP & xóa vĩnh viễn tài khoản (JWT required)
+- `POST /api/user/account/delete/request` - Gửi OTP xác nhận vô hiệu hóa tài khoản (JWT required)
+- `DELETE /api/user/account/delete/confirm` - Xác nhận OTP & vô hiệu hóa tài khoản khách hàng (JWT required)
 
 ### Staff (PT) Management Endpoints (Admin only):
 - `POST /api/admin/staff/create` - Tạo tài khoản PT mới (JWT admin required)

@@ -51,11 +51,19 @@ const authMiddleware = async (req, res, next) => {
       });
     }
 
+    if (!user.isActive) {
+      return res.status(403).json({
+        error: 'account_deactivated',
+        message: 'User account is deactivated'
+      });
+    }
+
     // Attach user to request object
     req.user = {
       id: user._id,
       phone: user.phone,
-      isVerified: user.isVerified
+      isVerified: user.isVerified,
+      isActive: user.isActive
     };
 
     next();
