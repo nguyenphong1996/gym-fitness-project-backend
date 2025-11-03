@@ -59,8 +59,8 @@ const {
  *                     attendanceId: { type: string, example: "65f5c0eb2a6d0c1a8f9b4c2e" }
  *                     classId: { type: string, example: "507f1f77bcf86cd799439013" }
  *                     role: { type: string, example: "staff" }
- *                     checkInAt: { type: string, format: date-time }
- *                     checkOutAt: { type: string, format: date-time, nullable: true }
+ *                     checkInAt: { type: string, format: "date-time" }
+ *                     checkOutAt: { type: string, format: "date-time", nullable: true }
  *       400:
  *         description: QR code không hợp lệ hoặc chưa mở điểm danh
  *       401:
@@ -109,6 +109,21 @@ router.post('/:classId/check-in', authMiddleware, staffCheckIn);
  *     responses:
  *       200:
  *         description: Check-out thành công
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean, example: true }
+ *                 message: { type: string, example: "Staff check-out recorded successfully" }
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     attendanceId: { type: string, example: "65f5c0eb2a6d0c1a8f9b4c2e" }
+ *                     classId: { type: string, example: "507f1f77bcf86cd799439013" }
+ *                     role: { type: string, example: "staff" }
+ *                     checkInAt: { type: string, format: "date-time" }
+ *                     checkOutAt: { type: string, format: "date-time" }
  *       400:
  *         description: Chưa check-in hoặc QR code không hợp lệ
  *       401:

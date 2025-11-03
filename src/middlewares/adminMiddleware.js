@@ -27,8 +27,7 @@ const adminMiddleware = async (req, res, next) => {
     if (user.role !== 'admin') {
       logInfo(`⛔ Non-admin access attempt: ${user.phone} (role: ${user.role})`);
       return res.status(403).json({ 
-        message: 'Forbidden - Admin access required',
-        yourRole: user.role 
+        message: 'Forbidden - Admin access required'
       });
     }
 

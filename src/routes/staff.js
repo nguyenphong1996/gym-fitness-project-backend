@@ -4,6 +4,7 @@ const express = require('express');
 const router = express.Router();
 const multer = require('multer');
 const path = require('path');
+const os = require('os');
 const fs = require('fs');
 const authMiddleware = require('../middlewares/authMiddleware');
 const adminMiddleware = require('../middlewares/adminMiddleware');
@@ -18,7 +19,7 @@ const {
 } = require('../controllers/staffController');
 
 // --- Multer configuration for staff avatar uploads ---
-const uploadDir = path.join('/tmp', 'gymxfit-avatars');
+const uploadDir = process.env.UPLOAD_AVATAR_DIR || path.join(os.tmpdir(), 'gymxfit-avatars');
 if (!fs.existsSync(uploadDir)) {
   fs.mkdirSync(uploadDir, { recursive: true });
 }
@@ -35,11 +36,11 @@ const storage = multer.diskStorage({
 const upload = multer({
   storage,
   fileFilter: (req, file, cb) => {
-    const allowedMimes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/jpg'];
+    const allowedMimes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
     if (allowedMimes.includes(file.mimetype)) {
       cb(null, true);
     } else {
-      cb(new Error('Invalid file type. Only JPG, PNG, GIF, WEBP files are allowed.'), false);
+      cb(new Error('Invalid file type. Only JPEG, PNG, GIF, WEBP files are allowed.'), false);
     }
   },
   limits: { fileSize: 5 * 1024 * 1024 } // 5 MB limit
@@ -528,7 +529,7 @@ router.get('/:staffId', authMiddleware, adminMiddleware, getStaffDetail);
  *     description: |
  *       Cho phép admin cập nhật avatar cho PT hoặc PT tự upload avatar của chính mình.
  *       - File ảnh phải gửi dưới dạng `multipart/form-data` với field `avatar`.
- *       - Định dạng hỗ trợ: JPG, PNG, GIF, WEBP. Kích thước tối đa 5MB.
+ *       - Định dạng hỗ trợ: JPEG, PNG, GIF, WEBP. Kích thước tối đa 5MB.
  *       - Avatar cũ (nếu có) sẽ bị xóa khỏi Cloudinary sau khi upload thành công.
  *       - PT có thể sử dụng endpoint này nếu cung cấp đúng `staffId` của chính mình.
  *     parameters:
@@ -550,7 +551,7 @@ router.get('/:staffId', authMiddleware, adminMiddleware, getStaffDetail);
  *               avatar:
  *                 type: string
  *                 format: binary
- *                 description: "File ảnh đại diện (JPG, PNG, GIF, WEBP - tối đa 5MB)"
+ *                 description: "File ảnh đại diện (JPEG, PNG, GIF, WEBP - tối đa 5MB)"
  *     responses:
  *       200:
  *         description: Cập nhật avatar thành công

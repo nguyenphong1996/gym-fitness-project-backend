@@ -52,7 +52,8 @@ jobs:
       continue-on-error: true
 
     - name: Check for security vulnerabilities
-      run: npm audit --audit-level=moderate || true
+      run: npm audit --audit-level=moderate
+      continue-on-error: false
 
   build:
     name: Build Application
@@ -77,7 +78,16 @@ jobs:
       continue-on-error: true
 
     - name: Start application in background
-      run: npm start &
+      run: |
+        npm start > app.log 2>&1 &
+        APP_PID=$!
+        echo "$APP_PID" > app.pid
+        sleep 2
+        if ! kill -0 "$APP_PID" 2>/dev/null; then
+          echo "❌ Application failed to start"
+          cat app.log
+          exit 1
+        fi
       env:
         MONGO_URI: ${{ secrets.MONGO_URI }}
         JWT_SECRET: ${{ secrets.JWT_SECRET }}
@@ -95,12 +105,17 @@ jobs:
             echo "✅ Server started successfully on port 3000"
             sleep 2
             curl -s http://localhost:3000/health && echo "" || echo "Health check failed"
-            lsof -ti:3000 | xargs kill -9 2>/dev/null || true
+            if [ -f app.pid ]; then
+              kill -9 "$(cat app.pid)" 2>/dev/null || true
+            fi
+            rm -f app.pid
             exit 0
           fi
           sleep 1
         done
         echo "❌ Server failed to start after 15 seconds"
+        echo "----- Application logs -----"
+        [ -f app.log ] && cat app.log
         exit 1
 
   code-quality:
@@ -116,10 +131,8 @@ jobs:
       with:
         node-version: '20.x'
 
-    - name: Check code formatting
-      run: |
-        echo "✅ Code quality check passed"
-        
+    - name: Run lint (fallback to tests)
+      run: npm run lint || npm test
     - name: Check for TODO comments
       run: |
         if grep -r "TODO\|FIXME" src/ --exclude-dir=node_modules || true; then
@@ -167,9 +180,6 @@ jobs:
       with:
         username: ${{ secrets.DOCKERHUB_USERNAME }}
         password: ${{ secrets.DOCKERHUB_PASSWORD }}
-
-    - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v3
 
     - name: Build and push Docker image to Docker Hub
       uses: docker/build-push-action@v5

@@ -1,3 +1,4 @@
+const path = require('path');
 const swaggerJsdoc = require('swagger-jsdoc');
 
 const options = {
@@ -6,7 +7,7 @@ const options = {
     info: {
       title: 'Gym Fitness API',
       version: '1.0.0',
-      description: 'Trang hướng dẫn setup API cho dự án Gym Fitness',
+      description: 'Trang hướng dẫn setup API cho dự án Gym Fitness'
     },
     servers: [
       {
@@ -43,6 +44,7 @@ const options = {
         },
         User: {
           type: 'object',
+          required: ['_id', 'phone', 'email', 'isVerified'],
           properties: {
             _id: {
               type: 'string',
@@ -76,6 +78,7 @@ const options = {
         },
         AdminUserInfo: {
           type: 'object',
+          required: ['id', 'phone', 'role', 'isVerified'],
           properties: {
             id: {
               type: 'string',
@@ -128,11 +131,13 @@ const options = {
             },
             weight: {
               type: 'number',
+              format: 'float',
               nullable: true,
               example: 70
             },
             height: {
               type: 'number',
+              format: 'float',
               nullable: true,
               example: 175
             },
@@ -163,7 +168,10 @@ const options = {
     },
     security: []
   },
-  apis: ['./src/routes/*.js', './src/controllers/*.js']
+  apis: [
+    path.resolve(__dirname, '../routes/*.js'),
+    path.resolve(__dirname, '../controllers/*.js')
+  ]
 };
 
 const swaggerSpec = swaggerJsdoc(options);
