@@ -60,9 +60,7 @@ const { getUserList, getUserDetail } = require('../controllers/adminUserControll
  *             schema:
  *               type: object
  *               properties:
- *                 success:
- *                   type: boolean
- *                   example: true
+ *                 success: { type: boolean, example: true }
  *                 data:
  *                   type: array
  *                   items:
@@ -78,10 +76,44 @@ const { getUserList, getUserDetail } = require('../controllers/adminUserControll
  *                       type: number
  *                     pages:
  *                       type: number
+ *       400:
+ *         description: Tham số lọc/pagination không hợp lệ
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean, example: false }
+ *                 error: { type: string, example: "invalid_query" }
+ *                 message: { type: string, example: "Invalid query parameters" }
  *       401:
  *         description: Token không hợp lệ hoặc thiếu
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message: { type: string, example: "Unauthorized" }
  *       403:
  *         description: Chỉ admin mới được truy cập
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message: { type: string, example: "Forbidden - Admin access required" }
+ *                 yourRole: { type: string, example: "staff" }
+ *       404:
+ *         description: Không áp dụng cho endpoint này (danh sách rỗng vẫn trả 200)
+ *       500:
+ *         description: Lỗi hệ thống
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean, example: false }
+ *                 message: { type: string, example: "Failed to fetch users" }
  */
 router.get('/', authMiddleware, adminMiddleware, getUserList);
 
@@ -113,19 +145,55 @@ router.get('/', authMiddleware, adminMiddleware, getUserList);
  *             schema:
  *               type: object
  *               properties:
- *                 success:
- *                   type: boolean
- *                   example: true
+ *                 success: { type: boolean, example: true }
  *                 user:
  *                   $ref: '#/components/schemas/AdminUserInfo'
  *       400:
  *         description: userId không hợp lệ
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean, example: false }
+ *                 error: { type: string, example: "invalid_id" }
+ *                 message: { type: string, example: "Invalid User ID format" }
  *       401:
  *         description: Token không hợp lệ hoặc thiếu
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message: { type: string, example: "Unauthorized" }
  *       403:
  *         description: Chỉ admin mới được truy cập
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message: { type: string, example: "Forbidden - Admin access required" }
+ *                 yourRole: { type: string, example: "customer" }
  *       404:
  *         description: Customer không tồn tại
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean, example: false }
+ *                 error: { type: string, example: "user_not_found" }
+ *                 message: { type: string, example: "Customer not found" }
+ *       500:
+ *         description: Lỗi hệ thống
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean, example: false }
+ *                 message: { type: string, example: "Failed to fetch user detail" }
  */
 router.get('/:userId', authMiddleware, adminMiddleware, getUserDetail);
 

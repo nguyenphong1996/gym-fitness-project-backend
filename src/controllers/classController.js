@@ -16,6 +16,48 @@ const {
   logAuth
 } = require('../utils/logger');
 
+const generateQrCodeForClass = async (classData) => {
+  const randomToken = crypto.randomBytes(24).toString('hex');
+  const generatedAt = new Date();
+  const payload = JSON.stringify({
+    classId: classData._id.toString(),
+    token: randomToken,
+    type: 'class_check',
+    generatedAt: generatedAt.toISOString()
+  });
+
+  const qrBuffer = await QRCode.toBuffer(payload, {
+    errorCorrectionLevel: 'M',
+    type: 'png',
+    margin: 2,
+    width: 512
+  });
+
+  const oldCloudinaryId = classData.qrCode?.cloudinary_id;
+  if (oldCloudinaryId) {
+    await deleteResource(oldCloudinaryId, 'image');
+  }
+
+  const uploadResult = await uploadImageBuffer(qrBuffer, {
+    folder: 'gymxfit/class-qrcodes',
+    public_id: `class_${classData._id}_qrcode`,
+    overwrite: true,
+    format: 'png',
+    transformation: [{ fetch_format: 'auto' }]
+  });
+
+  classData.qrCode = {
+    url: uploadResult.url,
+    cloudinary_id: uploadResult.cloudinary_id,
+    value: payload,
+    generatedAt
+  };
+
+  await classData.save();
+
+  return classData.qrCode;
+};
+
 /**
  * Create new class
  * POST /api/admin/classes/create
@@ -387,6 +429,14 @@ exports.openClass = async (req, res) => {
     classData.status = 'scheduled';
     await classData.save();
 
+    try {
+      await generateQrCodeForClass(classData);
+    } catch (error) {
+      classData.status = 'draft';
+      await classData.save();
+      throw error;
+    }
+
     logSuccess('classController.openClass', `Mở lớp học thành công: ${classData.name}`);
 
     res.status(200).json({
@@ -541,46 +591,11 @@ exports.generateClassQRCode = async (req, res) => {
       });
     }
 
-    const randomToken = crypto.randomBytes(24).toString('hex');
-    const generatedAt = new Date();
-    const payload = JSON.stringify({
-      classId: classData._id.toString(),
-      token: randomToken,
-      type: 'class_check',
-      generatedAt: generatedAt.toISOString()
-    });
-
-    const qrBuffer = await QRCode.toBuffer(payload, {
-      errorCorrectionLevel: 'M',
-      type: 'png',
-      margin: 2,
-      width: 512
-    });
-
-    const oldCloudinaryId = classData.qrCode?.cloudinary_id;
-    if (oldCloudinaryId) {
-      await deleteResource(oldCloudinaryId, 'image');
-    }
-
-    const uploadResult = await uploadImageBuffer(qrBuffer, {
-      folder: 'gymxfit/class-qrcodes',
-      public_id: `class_${classData._id}_qrcode`,
-      overwrite: true,
-      format: 'png',
-      transformation: [{ fetch_format: 'auto' }]
-    });
-
-    classData.qrCode = {
-      url: uploadResult.url,
-      cloudinary_id: uploadResult.cloudinary_id,
-      value: payload,
-      generatedAt
-    };
-    await classData.save();
+    await generateQrCodeForClass(classData);
 
     logSuccess(context, `Tạo QR code thành công cho lớp: ${classData.name}`, {
       classId: classData._id,
-      cloudinary_id: uploadResult.cloudinary_id
+      cloudinary_id: classData.qrCode?.cloudinary_id
     });
 
     return res.status(201).json({

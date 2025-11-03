@@ -4,6 +4,10 @@ const router = express.Router();
 const enrollmentController = require('../controllers/enrollmentController');
 const authMiddleware = require('../middlewares/authMiddleware');
 const adminMiddleware = require('../middlewares/adminMiddleware');
+const {
+  customerCheckIn,
+  customerCheckOut
+} = require('../controllers/classAttendanceController');
 
 /**
  * @swagger
@@ -155,6 +159,102 @@ const adminMiddleware = require('../middlewares/adminMiddleware');
  *                   type: string
  */
 router.post('/classes/:classId/enroll', authMiddleware, enrollmentController.enrollClass);
+
+/**
+ * @swagger
+ * /api/customer/classes/{classId}/check-in:
+ *   post:
+ *     tags: [Class Enrollment]
+ *     summary: Customer check-in lớp học bằng QR code
+ *     operationId: customerClassCheckIn
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: classId
+ *         required: true
+ *         schema:
+ *           type: string
+ *           pattern: '^[0-9a-f]{24}$'
+ *         description: ID lớp học
+ *         example: "507f1f77bcf86cd799439013"
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [qrValue]
+ *             properties:
+ *               qrValue:
+ *                 type: string
+ *                 description: Payload JSON đọc được từ QR code lớp
+ *                 example: '{"classId":"507f1f77bcf86cd799439013","token":"abcd1234","type":"class_check","generatedAt":"2025-01-01T08:00:00.000Z"}'
+ *     responses:
+ *       200:
+ *         description: Ghi nhận check-in thành công
+ *       400:
+ *         description: QR code không hợp lệ hoặc chưa check-in được
+ *       401:
+ *         description: Thiếu token đăng nhập
+ *       403:
+ *         description: Người dùng chưa đăng ký lớp này
+ *       409:
+ *         description: Đã check-in trước đó
+ *       404:
+ *         description: Không tìm thấy lớp hoặc QR code tương ứng
+ *       500:
+ *         description: Lỗi hệ thống khi ghi nhận check-in
+ */
+router.post('/classes/:classId/check-in', authMiddleware, customerCheckIn);
+
+/**
+ * @swagger
+ * /api/customer/classes/{classId}/check-out:
+ *   post:
+ *     tags: [Class Enrollment]
+ *     summary: Customer check-out lớp học bằng QR code
+ *     operationId: customerClassCheckOut
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: classId
+ *         required: true
+ *         schema:
+ *           type: string
+ *           pattern: '^[0-9a-f]{24}$'
+ *         description: ID lớp học
+ *         example: "507f1f77bcf86cd799439013"
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [qrValue]
+ *             properties:
+ *               qrValue:
+ *                 type: string
+ *                 description: Payload JSON đọc được từ QR code lớp
+ *                 example: '{"classId":"507f1f77bcf86cd799439013","token":"abcd1234","type":"class_check","generatedAt":"2025-01-01T08:00:00.000Z"}'
+ *     responses:
+ *       200:
+ *         description: Ghi nhận check-out thành công
+ *       400:
+ *         description: Chưa check-in hoặc QR code không hợp lệ
+ *       401:
+ *         description: Thiếu token đăng nhập
+ *       403:
+ *         description: Không có quyền check-out lớp này
+ *       409:
+ *         description: Đã check-out trước đó
+ *       404:
+ *         description: Không tìm thấy lớp hoặc QR code tương ứng
+ *       500:
+ *         description: Lỗi hệ thống khi ghi nhận check-out
+ */
+router.post('/classes/:classId/check-out', authMiddleware, customerCheckOut);
 
 /**
  * @swagger
