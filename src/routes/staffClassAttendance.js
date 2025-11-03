@@ -68,7 +68,7 @@ const {
  *       403:
  *         description: Không phải PT của lớp này
  *       409:
- *         description: PT đã check-in trước đó
+ *         description: PT đã check-in trước đó hoặc lớp đã kết thúc
  *       404:
  *         description: Không tìm thấy lớp hoặc QR code tương ứng
  *       500:
@@ -131,7 +131,7 @@ router.post('/:classId/check-in', authMiddleware, staffCheckIn);
  *       403:
  *         description: Không phải PT của lớp này
  *       409:
- *         description: Đã check-out trước đó
+ *         description: Đã check-out trước đó hoặc đã quá thời gian cho phép sau khi lớp kết thúc
  *       404:
  *         description: Không tìm thấy lớp hoặc QR code tương ứng
  *       500:
