@@ -2,13 +2,14 @@ const express = require('express');
 const router = express.Router();
 const multer = require('multer');
 const path = require('path');
+const os = require('os');
 const fs = require('fs');
 const authMiddleware = require('../middlewares/authMiddleware');
 const adminMiddleware = require('../middlewares/adminMiddleware');
 const { uploadVideoFile, getAllVideos, getVideoById, deleteVideoById, getSubcategoriesByCategory } = require('../controllers/videoController');
 
 // Tạo thư mục tạm nếu không tồn tại
-const uploadDir = path.join('/tmp', 'gymxfit-uploads');
+const uploadDir = process.env.UPLOAD_DIR || path.join(os.tmpdir(), 'gymxfit-uploads');
 if (!fs.existsSync(uploadDir)) {
   fs.mkdirSync(uploadDir, { recursive: true });
 }
@@ -30,7 +31,7 @@ const upload = multer({
     if (allowedMimes.includes(file.mimetype)) {
       cb(null, true);
     } else {
-      cb(new Error('Only video files allowed (MP4, MOV, WEBM)'), false);
+      cb(new Error('Only video files allowed (MP4, MPEG, MOV, WEBM)'), false);
     }
   },
   limits: { fileSize: 100 * 1024 * 1024 }
@@ -67,7 +68,7 @@ const upload = multer({
  *       - Validation: subcategory phải match category
  *       
  *       📋 **Định dạng hỗ trợ:**
- *       - MP4, MOV, WEBM
+ *       - MP4, MPEG, MOV, WEBM
  *       - Max: 100MB
  *       
  *       🏷️ **Category và Subcategory:**
@@ -102,7 +103,7 @@ const upload = multer({
  *               video:
  *                 type: string
  *                 format: binary
- *                 description: Video file (MP4, MOV, WEBM), max 100MB
+ *                 description: Video file (MP4, MPEG, MOV, WEBM), max 100MB
  *               title:
  *                 type: string
  *                 minLength: 1
@@ -187,7 +188,7 @@ const upload = multer({
  *                 message:
  *                   type: string
  *                   example: "Title and estimated calories required"
- *                   description: "Lỗi có thể là: Video file required | Title and estimated calories required | Only video files allowed (MP4, MOV, WEBM)"
+ *                   description: "Lỗi có thể là: Video file required | Title and estimated calories required | Only video files allowed (MP4, MPEG, MOV, WEBM)"
  *       401:
  *         description: Unauthorized - Token không hợp lệ hoặc hết hạn
  *         content:

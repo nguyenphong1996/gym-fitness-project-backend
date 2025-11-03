@@ -3,12 +3,13 @@ const express = require('express');
 const router = express.Router();
 const multer = require('multer');
 const path = require('path');
+const os = require('os');
 const fs = require('fs');
 const userController = require('../controllers/userController');
 const authMiddleware = require('../middlewares/authMiddleware');
 
 // --- Multer Configuration for Avatar Upload ---
-const uploadDir = path.join('/tmp', 'gymxfit-avatars');
+const uploadDir = process.env.UPLOAD_AVATAR_DIR || path.join(os.tmpdir(), 'gymxfit-avatars');
 if (!fs.existsSync(uploadDir)) {
   fs.mkdirSync(uploadDir, { recursive: true });
 }
@@ -24,11 +25,11 @@ const storage = multer.diskStorage({
 const upload = multer({
   storage: storage,
   fileFilter: (req, file, cb) => {
-    const allowedMimes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/jpg'];
+    const allowedMimes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
     if (allowedMimes.includes(file.mimetype)) {
       cb(null, true);
     } else {
-      cb(new Error('Invalid file type. Only JPG, PNG, GIF, WEBP files are allowed.'), false);
+      cb(new Error('Invalid file type. Only JPEG, PNG, GIF, WEBP files are allowed.'), false);
     }
   },
   limits: { fileSize: 5 * 1024 * 1024 } // 5 MB limit
@@ -166,7 +167,7 @@ router.get('/profile', authMiddleware, userController.getProfile);
  *               gender: { type: string, enum: [male, female, other] }
  *               dob: { type: string, format: date }
  *               weight: { type: number, minimum: 0, maximum: 300 }
- *               height: { type: number, minimum: 0, maximum: 200 }
+ *               height: { type: number, minimum: 0, maximum: 250 }
  *     responses:
  *       200:
  *         description: Cập nhật thành công
@@ -219,7 +220,7 @@ router.put('/profile', authMiddleware, userController.updateProfile);
  *               avatar:
  *                 type: string
  *                 format: binary
- *                 description: "File ảnh (JPG, PNG, GIF, WEBP), tối đa 5MB."
+ *                 description: "File ảnh (JPEG, PNG, GIF, WEBP), tối đa 5MB."
  *     responses:
  *       200:
  *         description: Upload avatar thành công

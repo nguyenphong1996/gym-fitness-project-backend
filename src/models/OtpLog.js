@@ -6,7 +6,7 @@ const OtpLogSchema = new mongoose.Schema({
   type: { type: String, enum: ['register', 'login', 'delete_account'], default: 'register' },
   sessionId: { type: String },
   smsId: { type: String },
-  apiResult: { type: Object },
+  apiResult: { type: mongoose.Schema.Types.Mixed },
   createdAt: { type: Date, default: Date.now },
   expiresAt: { type: Date },
   status: { type: String, enum: ['pending', 'sent', 'verified', 'expired', 'failed'], default: 'sent' },
@@ -15,5 +15,6 @@ const OtpLogSchema = new mongoose.Schema({
 });
 
 OtpLogSchema.index({ phone: 1, createdAt: -1 });
+OtpLogSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
 
 module.exports = mongoose.model('OtpLog', OtpLogSchema);

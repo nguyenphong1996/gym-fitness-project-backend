@@ -11,10 +11,9 @@ const connectDB = async () => {
     await mongoose.connect(process.env.MONGO_URI);
     console.log('✅ Kết nối MongoDB thành công!');
   } catch (error) {
-    console.error('❌ Lỗi kết nối MongoDB:', error.message);
-    if (process.env.NODE_ENV === 'production') {
-      process.exit(1);
-    }
+    console.error('❌ Lỗi kết nối MongoDB:', error);
+    // Exit on connection failure to fail fast in all environments
+    process.exit(1);
   }
 };
 

@@ -8,15 +8,22 @@ const UserSchema = new mongoose.Schema({
 
   // Profile fields
   name: { type: String, trim: true },
-  email: { type: String, trim: true, lowercase: true, sparse: true }, // sparse for unique optional
+  email: {
+    type: String,
+    trim: true,
+    lowercase: true,
+    unique: true,
+    sparse: true,
+    match: [/^\S+@\S+\.\S+$/, 'Invalid email format']
+  }, // sparse for unique optional
   avatar: {
     url: { type: String, trim: true },
     cloudinary_id: { type: String, trim: true }
   },
   gender: { type: String, enum: ['male', 'female', 'other'], trim: true }, // Giới tính
   dob: { type: Date },
-  weight: { type: Number, min: 0, max: 100 }, // kg
-  height: { type: Number, min: 0, max: 200 }, // cm
+  weight: { type: Number, min: 0, max: 300 }, // kg
+  height: { type: Number, min: 0, max: 250 }, // cm
 
   // PT (Staff) specific fields
   skills: { 
