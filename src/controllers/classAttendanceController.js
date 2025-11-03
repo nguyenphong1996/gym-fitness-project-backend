@@ -11,6 +11,27 @@ const {
 } = require('../utils/logger');
 
 const ALLOWED_CLASS_STATUSES = ['scheduled', 'ongoing'];
+// Allow a short post-class window for check-out scans (minutes).
+const rawGraceMinutes = parseInt(process.env.CLASS_CHECKOUT_GRACE_MINUTES || '15', 10);
+const DEFAULT_CHECKOUT_GRACE_MINUTES = Number.isFinite(rawGraceMinutes) && rawGraceMinutes >= 0
+  ? rawGraceMinutes
+  : 15;
+
+const markClassCompletedIfNeeded = async (classData, now = new Date()) => {
+  if (!classData?.endTime) {
+    return;
+  }
+
+  if (now <= classData.endTime) {
+    return;
+  }
+
+  if (!['completed', 'cancelled'].includes(classData.status)) {
+    classData.status = 'completed';
+    classData.updatedAt = now;
+    await classData.save();
+  }
+};
 
 const createHttpError = (status, message, code) => {
   const error = new Error(message);
@@ -43,7 +64,12 @@ const parseQrPayload = (rawValue, context) => {
   );
 };
 
-const ensureClassWithQr = async (classIdInput, qrValue, context) => {
+const ensureClassWithQr = async (classIdInput, qrValue, context, options = {}) => {
+  const {
+    allowAfterEnd = false,
+    maxMinutesAfterEnd = DEFAULT_CHECKOUT_GRACE_MINUTES
+  } = options;
+
   const validation = validateObjectId(classIdInput, { required: true, fieldName: 'Class ID' });
   if (!validation.valid) {
     throw createHttpError(400, validation.message, validation.error || 'invalid_class_id');
@@ -54,7 +80,9 @@ const ensureClassWithQr = async (classIdInput, qrValue, context) => {
     throw createHttpError(404, 'Class not found', 'class_not_found');
   }
 
-  if (!ALLOWED_CLASS_STATUSES.includes(classData.status)) {
+  const allowedStatuses = allowAfterEnd ? [...ALLOWED_CLASS_STATUSES, 'completed'] : ALLOWED_CLASS_STATUSES;
+
+  if (!allowedStatuses.includes(classData.status)) {
     throw createHttpError(
       400,
       `Class status does not allow attendance tracking: ${classData.status}`,
@@ -85,6 +113,29 @@ const ensureClassWithQr = async (classIdInput, qrValue, context) => {
 
   if (incomingPayload.token !== storedPayload.token) {
     throw createHttpError(400, 'QR token is invalid or expired', 'qr_token_mismatch');
+  }
+
+  const now = new Date();
+  const classEndTime = classData.endTime ? new Date(classData.endTime) : null;
+
+  if (classEndTime && !Number.isNaN(classEndTime.getTime()) && now > classEndTime) {
+    await markClassCompletedIfNeeded(classData, now);
+
+    const diffMinutes = (now.getTime() - classEndTime.getTime()) / (1000 * 60);
+
+    const withinGrace = allowAfterEnd && (
+      maxMinutesAfterEnd === null || maxMinutesAfterEnd === undefined || diffMinutes <= maxMinutesAfterEnd
+    );
+
+    if (!withinGrace) {
+      throw createHttpError(
+        409,
+        allowAfterEnd
+          ? 'Class has ended and checkout window is closed'
+          : 'Class has already ended, check-in is no longer allowed',
+        allowAfterEnd ? 'class_checkout_window_closed' : 'class_already_ended'
+      );
+    }
   }
 
   return { classData, qrPayload: incomingPayload };
@@ -207,7 +258,12 @@ exports.staffCheckOut = async (req, res) => {
       throw createHttpError(400, 'QR payload is required', 'missing_qr_payload');
     }
 
-    const { classData, qrPayload } = await ensureClassWithQr(req.params.classId, qrValue, 'staff_check');
+    const { classData, qrPayload } = await ensureClassWithQr(
+      req.params.classId,
+      qrValue,
+      'staff_check',
+      { allowAfterEnd: true, maxMinutesAfterEnd: DEFAULT_CHECKOUT_GRACE_MINUTES }
+    );
 
     if (classData.staffId.toString() !== staff._id.toString()) {
       throw createHttpError(403, 'You are not assigned to this class', 'staff_not_assigned');
@@ -353,7 +409,12 @@ exports.customerCheckOut = async (req, res) => {
       throw createHttpError(400, 'QR payload is required', 'missing_qr_payload');
     }
 
-    const { classData, qrPayload } = await ensureClassWithQr(req.params.classId, qrValue, 'customer_check');
+    const { classData, qrPayload } = await ensureClassWithQr(
+      req.params.classId,
+      qrValue,
+      'customer_check',
+      { allowAfterEnd: true, maxMinutesAfterEnd: DEFAULT_CHECKOUT_GRACE_MINUTES }
+    );
 
     const attendance = await ClassAttendance.findOne({
       classId: classData._id,

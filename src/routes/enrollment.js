@@ -200,7 +200,7 @@ router.post('/classes/:classId/enroll', authMiddleware, enrollmentController.enr
  *       403:
  *         description: Người dùng chưa đăng ký lớp này
  *       409:
- *         description: Đã check-in trước đó
+ *         description: Đã check-in trước đó hoặc lớp đã kết thúc
  *       404:
  *         description: Không tìm thấy lớp hoặc QR code tương ứng
  *       500:
@@ -248,7 +248,7 @@ router.post('/classes/:classId/check-in', authMiddleware, customerCheckIn);
  *       403:
  *         description: Không có quyền check-out lớp này
  *       409:
- *         description: Đã check-out trước đó
+ *         description: Đã check-out trước đó hoặc đã quá thời gian cho phép sau khi lớp kết thúc
  *       404:
  *         description: Không tìm thấy lớp hoặc QR code tương ứng
  *       500:
