@@ -24,6 +24,9 @@ var adminUserRouter = require('./src/routes/adminUser');
 var classRouter = require('./src/routes/class');
 var enrollmentRouter = require('./src/routes/enrollment');
 const mongoose = require('mongoose');
+const {
+  evaluateClassesForBackground,
+} = require('./src/services/classStatusService');
 
 const DIAGNOSTIC_TOKEN = process.env.DIAGNOSTIC_TOKEN || null;
 let isDbReady = mongoose.connection.readyState === 1;
@@ -113,6 +116,61 @@ app.use('/api/admin/staff', staffRouter);
 app.use('/api/admin/users', adminUserRouter);
 app.use('/api/admin/classes', classRouter);
 app.use('/api/customer', enrollmentRouter);
+
+/**
+ * Background scheduler: evaluate class lifecycle to keep statuses up to date.
+ * Enabled by default. Set ENABLE_CLASS_STATUS_CRON=false to disable.
+ * Customize interval via CLASS_STATUS_CRON_INTERVAL_MS (default 60s).
+ */
+const ENABLE_CLASS_STATUS_CRON = String(process.env.ENABLE_CLASS_STATUS_CRON || 'true').toLowerCase() !== 'false';
+const CLASS_STATUS_CRON_INTERVAL_MS = (() => {
+  const parsed = parseInt(process.env.CLASS_STATUS_CRON_INTERVAL_MS, 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 60_000;
+})();
+
+if (ENABLE_CLASS_STATUS_CRON) {
+  let statusEvaluationInterval = null;
+  let isEvaluationRunning = false;
+
+  const stopStatusEvaluation = () => {
+    if (statusEvaluationInterval) {
+      clearInterval(statusEvaluationInterval);
+      statusEvaluationInterval = null;
+    }
+  };
+
+  const runStatusEvaluation = async () => {
+    if (isEvaluationRunning || mongoose.connection.readyState !== 1) {
+      return;
+    }
+    isEvaluationRunning = true;
+    try {
+      await evaluateClassesForBackground();
+    } catch (error) {
+      console.error('⚠️  Failed to evaluate class statuses:', error);
+    } finally {
+      isEvaluationRunning = false;
+    }
+  };
+
+  const startStatusEvaluation = () => {
+    if (statusEvaluationInterval) {
+      return;
+    }
+    statusEvaluationInterval = setInterval(runStatusEvaluation, CLASS_STATUS_CRON_INTERVAL_MS);
+    runStatusEvaluation().catch(() => {
+      // Error already logged inside runStatusEvaluation
+    });
+  };
+
+  if (mongoose.connection.readyState === 1) {
+    startStatusEvaluation();
+  } else {
+    mongoose.connection.once('connected', startStatusEvaluation);
+  }
+
+  mongoose.connection.on('disconnected', stopStatusEvaluation);
+}
 
 // Lightweight liveness probe
 /**
