@@ -29,11 +29,11 @@ exports.enrollClass = async (req, res) => {
       });
     }
 
-    // Kiểm tra class status có phải 'scheduled' không
-    if (classData.status !== 'scheduled') {
+    // Kiểm tra class status có thuộc nhóm đăng ký cho phép không
+    if (!['scheduled', 'waiting_pt'].includes(classData.status)) {
       return res.status(409).json({
         success: false,
-        message: `Cannot enroll in a class with status '${classData.status}'. Only 'scheduled' classes can be enrolled.`
+        message: `Cannot enroll in a class with status '${classData.status}'. Only 'scheduled' or 'waiting_pt' classes can be enrolled.`
       });
     }
 

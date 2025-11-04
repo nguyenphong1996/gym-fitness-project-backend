@@ -25,6 +25,14 @@ const classAttendanceSchema = new mongoose.Schema({
     default: null
   },
   checkInToken: { type: String, trim: true },
+  isLateCheckIn: {
+    type: Boolean,
+    default: false
+  },
+  checkInOffsetMinutes: {
+    type: Number,
+    default: 0
+  },
   checkOutAt: { type: Date, default: null },
   checkOutMethod: {
     type: String,
@@ -32,6 +40,14 @@ const classAttendanceSchema = new mongoose.Schema({
     default: null
   },
   checkOutToken: { type: String, trim: true },
+  isEarlyCheckOut: {
+    type: Boolean,
+    default: false
+  },
+  checkOutOffsetMinutes: {
+    type: Number,
+    default: 0
+  },
   metadata: { type: mongoose.Schema.Types.Mixed, default: null }
 }, {
   timestamps: true
