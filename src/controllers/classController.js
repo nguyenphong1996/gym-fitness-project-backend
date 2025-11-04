@@ -1,6 +1,7 @@
 const crypto = require('crypto');
 const QRCode = require('qrcode');
 const Class = require('../models/Class');
+const ClassAttendance = require('../models/ClassAttendance');
 const User = require('../models/User');
 const {
   validateCreateClassRequest,
@@ -16,7 +17,24 @@ const {
   logAuth
 } = require('../utils/logger');
 
+const {
+  COMPLETION_DELAY_MINUTES,
+  updateClassLifecycleStatus
+} = require('../services/classStatusService');
+
 const generateQrCodeForClass = async (classData) => {
+  const hasAnyCheckIn = await ClassAttendance.exists({
+    classId: classData._id,
+    checkInAt: { $ne: null }
+  });
+
+  if (hasAnyCheckIn) {
+    const error = new Error('Cannot regenerate QR code after check-in has been recorded');
+    error.status = 400;
+    error.code = 'qr_regeneration_forbidden';
+    throw error;
+  }
+
   const randomToken = crypto.randomBytes(24).toString('hex');
   const generatedAt = new Date();
   const payload = JSON.stringify({
@@ -169,7 +187,18 @@ exports.getClassList = async (req, res) => {
     const filter = {};
 
     if (req.query.status) {
-      const validStatuses = ['draft', 'scheduled', 'ongoing', 'completed', 'cancelled'];
+      const validStatuses = [
+        'draft',
+        'scheduled',
+        'waiting_pt',
+        'on_going_waiting_customers',
+        'on_going',
+        'waiting_checkout',
+        'completed',
+        'expired',
+        'overdue',
+        'cancelled'
+      ];
       if (validStatuses.includes(req.query.status)) {
         filter.status = req.query.status;
       }
@@ -446,9 +475,11 @@ exports.openClass = async (req, res) => {
     });
   } catch (error) {
     logError('classController.openClass', 'Lỗi khi mở lớp học', error);
-    res.status(500).json({
+    const status = Number.isInteger(error?.status) ? error.status : 500;
+    res.status(status).json({
       success: false,
-      message: 'Internal server error'
+      message: status === 500 ? 'Internal server error' : error.message || 'Failed to open class',
+      error: error.code
     });
   }
 };
@@ -479,25 +510,117 @@ exports.closeClass = async (req, res) => {
       });
     }
 
-    // Determine new status
-    const newStatus = req.body.reason === 'cancelled' ? 'cancelled' : 'completed';
+    const refreshedStatus = await updateClassLifecycleStatus(classData._id);
+    if (refreshedStatus) {
+      classData.status = refreshedStatus;
+    }
 
-    if (['completed', 'cancelled'].includes(classData.status)) {
-      logWarning('classController.closeClass', `Lớp học đã ${classData.status}: ${classData._id}`);
+    const finalStatuses = ['completed', 'cancelled', 'expired', 'overdue'];
+    if (finalStatuses.includes(classData.status)) {
+      logWarning('classController.closeClass', `Lớp học đã ở trạng thái cuối: ${classData.status}`);
       return res.status(400).json({
         success: false,
         message: `Class is already ${classData.status}`
       });
     }
 
-    classData.status = newStatus;
+    const reason = typeof req.body.reason === 'string' ? req.body.reason.toLowerCase() : 'completed';
+
+    if (reason === 'cancelled') {
+      classData.status = 'cancelled';
+      classData.updatedAt = new Date();
+      await classData.save();
+
+      logSuccess('classController.closeClass', `Đóng lớp học với trạng thái cancelled: ${classData.name}`);
+      return res.status(200).json({
+        success: true,
+        message: 'Class closed as cancelled',
+        data: classData
+      });
+    }
+
+    if (reason !== 'completed') {
+      logWarning('classController.closeClass', `Lý do đóng lớp không hợp lệ: ${reason}`);
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid reason. Must be one of: completed, cancelled'
+      });
+    }
+
+    const completionReadyAt = new Date(classData.endTime);
+    completionReadyAt.setMinutes(completionReadyAt.getMinutes() + COMPLETION_DELAY_MINUTES);
+    const now = new Date();
+
+    if (now < completionReadyAt) {
+      return res.status(400).json({
+        success: false,
+        message: `Class cannot be marked completed before ${COMPLETION_DELAY_MINUTES} minutes after end time`
+      });
+    }
+
+    const staffAttendance = await ClassAttendance.findOne({
+      classId: classData._id,
+      role: 'staff',
+      checkInAt: { $ne: null }
+    });
+
+    if (!staffAttendance || !staffAttendance.checkOutAt) {
+      return res.status(400).json({
+        success: false,
+        message: 'Staff must check in and check out before completing the class'
+      });
+    }
+
+    const anyCustomerCheckedIn = await ClassAttendance.exists({
+      classId: classData._id,
+      role: 'customer',
+      checkInAt: { $ne: null }
+    });
+
+    if (!anyCustomerCheckedIn) {
+      return res.status(400).json({
+        success: false,
+        message: 'At least one customer must check in before completing the class'
+      });
+    }
+
+    const anyCustomerCheckedOut = await ClassAttendance.exists({
+      classId: classData._id,
+      role: 'customer',
+      checkInAt: { $ne: null },
+      checkOutAt: { $ne: null }
+    });
+
+    if (!anyCustomerCheckedOut) {
+      return res.status(400).json({
+        success: false,
+        message: 'At least one customer must check out before completing the class'
+      });
+    }
+
+    const pendingCustomerAttendance = await ClassAttendance.findOne({
+      classId: classData._id,
+      role: 'customer',
+      checkInAt: { $ne: null },
+      $or: [{ checkOutAt: null }, { checkOutAt: { $exists: false } }]
+    });
+
+    if (pendingCustomerAttendance) {
+      return res.status(400).json({
+        success: false,
+        message: 'All customers must check out before completing the class'
+      });
+    }
+
+    classData.status = 'completed';
+    classData.updatedAt = now;
     await classData.save();
 
-    logSuccess('classController.closeClass', `Đóng lớp học thành công (${newStatus}): ${classData.name}`);
+    logSuccess('classController.closeClass', `Đóng lớp học thành công (completed): ${classData.name}`);
 
     res.status(200).json({
       success: true,
-      message: `Class closed as ${newStatus}`,
+      message: 'Class closed as completed',
       data: classData
     });
   } catch (error) {
@@ -580,14 +703,14 @@ exports.generateClassQRCode = async (req, res) => {
       });
     }
 
-    if (!['scheduled', 'ongoing'].includes(classData.status)) {
+    if (!['scheduled', 'waiting_pt'].includes(classData.status)) {
       logWarning(context, `Không thể tạo QR code cho lớp với trạng thái: ${classData.status}`, {
         classId: classData._id
       });
       return res.status(400).json({
         success: false,
         error: 'invalid_class_status',
-        message: 'QR code can only be generated for classes that are scheduled or ongoing'
+        message: 'QR code can only be generated for classes that are scheduled and waiting for PT check-in'
       });
     }
 
@@ -609,10 +732,11 @@ exports.generateClassQRCode = async (req, res) => {
     });
   } catch (error) {
     logError(context, 'Lỗi khi tạo QR code cho lớp học', error);
-    return res.status(500).json({
+    const status = Number.isInteger(error?.status) ? error.status : 500;
+    return res.status(status).json({
       success: false,
-      error: 'server_error',
-      message: 'Failed to generate class QR code'
+      error: error.code || (status === 500 ? 'server_error' : 'invalid_request'),
+      message: status === 500 ? 'Failed to generate class QR code' : error.message
     });
   }
 };

@@ -9,29 +9,20 @@ const {
   logWarning,
   logDebug
 } = require('../utils/logger');
+const {
+  updateClassLifecycleStatus
+} = require('../services/classStatusService');
 
-const ALLOWED_CLASS_STATUSES = ['scheduled', 'ongoing'];
 // Allow a short post-class window for check-out scans (minutes).
 const rawGraceMinutes = parseInt(process.env.CLASS_CHECKOUT_GRACE_MINUTES || '15', 10);
 const DEFAULT_CHECKOUT_GRACE_MINUTES = Number.isFinite(rawGraceMinutes) && rawGraceMinutes >= 0
   ? rawGraceMinutes
   : 15;
 
-const markClassCompletedIfNeeded = async (classData, now = new Date()) => {
-  if (!classData?.endTime) {
-    return;
-  }
-
-  if (now <= classData.endTime) {
-    return;
-  }
-
-  if (!['completed', 'cancelled'].includes(classData.status)) {
-    classData.status = 'completed';
-    classData.updatedAt = now;
-    await classData.save();
-  }
-};
+const rawCheckInGraceMinutes = parseInt(process.env.CLASS_CHECKIN_GRACE_MINUTES || '15', 10);
+const DEFAULT_CHECKIN_GRACE_MINUTES = Number.isFinite(rawCheckInGraceMinutes) && rawCheckInGraceMinutes >= 0
+  ? rawCheckInGraceMinutes
+  : 15;
 
 const createHttpError = (status, message, code) => {
   const error = new Error(message);
@@ -64,10 +55,49 @@ const parseQrPayload = (rawValue, context) => {
   );
 };
 
+const calculateCheckInWindowStart = (classData, graceMinutes = DEFAULT_CHECKIN_GRACE_MINUTES) => {
+  if (!classData?.startTime) {
+    return null;
+  }
+
+  const windowStart = new Date(classData.startTime);
+  windowStart.setMinutes(windowStart.getMinutes() - graceMinutes);
+  return windowStart;
+};
+
+const toDate = (value) => {
+  if (!value) return null;
+  if (value instanceof Date) return value;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+};
+
+const calculateOffsetMinutes = (timestamp, reference) => {
+  if (!timestamp || !reference) return 0;
+  return Math.round((timestamp.getTime() - reference.getTime()) / (1000 * 60));
+};
+
+const applyCheckInMetrics = (attendance, classData, timestamp) => {
+  const startTime = toDate(classData.startTime);
+  const offset = calculateOffsetMinutes(timestamp, startTime);
+  attendance.checkInOffsetMinutes = offset;
+  attendance.isLateCheckIn = offset > 0;
+};
+
+const applyCheckOutMetrics = (attendance, classData, timestamp) => {
+  const endTime = toDate(classData.endTime);
+  const offset = calculateOffsetMinutes(timestamp, endTime);
+  attendance.checkOutOffsetMinutes = offset;
+  attendance.isEarlyCheckOut = offset < 0;
+};
+
 const ensureClassWithQr = async (classIdInput, qrValue, context, options = {}) => {
   const {
     allowAfterEnd = false,
-    maxMinutesAfterEnd = DEFAULT_CHECKOUT_GRACE_MINUTES
+    maxMinutesAfterEnd = DEFAULT_CHECKOUT_GRACE_MINUTES,
+    allowedStatuses,
+    enforceCheckInWindow = false,
+    checkInGraceMinutes = DEFAULT_CHECKIN_GRACE_MINUTES
   } = options;
 
   const validation = validateObjectId(classIdInput, { required: true, fieldName: 'Class ID' });
@@ -78,16 +108,6 @@ const ensureClassWithQr = async (classIdInput, qrValue, context, options = {}) =
   const classData = await Class.findById(validation.id);
   if (!classData) {
     throw createHttpError(404, 'Class not found', 'class_not_found');
-  }
-
-  const allowedStatuses = allowAfterEnd ? [...ALLOWED_CLASS_STATUSES, 'completed'] : ALLOWED_CLASS_STATUSES;
-
-  if (!allowedStatuses.includes(classData.status)) {
-    throw createHttpError(
-      400,
-      `Class status does not allow attendance tracking: ${classData.status}`,
-      'invalid_class_status'
-    );
   }
 
   if (!classData.qrCode?.value) {
@@ -116,11 +136,37 @@ const ensureClassWithQr = async (classIdInput, qrValue, context, options = {}) =
   }
 
   const now = new Date();
+
+  if (enforceCheckInWindow) {
+    const windowStart = calculateCheckInWindowStart(classData, checkInGraceMinutes);
+    if (windowStart && now < windowStart) {
+      throw createHttpError(
+        409,
+        'Check-in is only allowed within the pre-defined time window before class start',
+        'checkin_window_not_started'
+      );
+    }
+
+    await promoteClassToWaitingPtIfNeeded(classData, now, { allowedStatuses: allowedStatuses || [] });
+  }
+
+  const resolvedAllowedStatuses = allowedStatuses
+    ? allowedStatuses
+    : allowAfterEnd
+      ? ['on_going_waiting_customers', 'on_going', 'waiting_checkout', 'overdue', 'completed']
+      : ['scheduled', 'waiting_pt', 'on_going_waiting_customers', 'on_going'];
+
+  if (!resolvedAllowedStatuses.includes(classData.status)) {
+    throw createHttpError(
+      400,
+      `Class status does not allow attendance tracking: ${classData.status}`,
+      'invalid_class_status'
+    );
+  }
+
   const classEndTime = classData.endTime ? new Date(classData.endTime) : null;
 
   if (classEndTime && !Number.isNaN(classEndTime.getTime()) && now > classEndTime) {
-    await markClassCompletedIfNeeded(classData, now);
-
     const diffMinutes = (now.getTime() - classEndTime.getTime()) / (1000 * 60);
 
     const withinGrace = allowAfterEnd && (
@@ -138,7 +184,7 @@ const ensureClassWithQr = async (classIdInput, qrValue, context, options = {}) =
     }
   }
 
-  return { classData, qrPayload: incomingPayload };
+  return { classData, qrPayload: incomingPayload, now };
 };
 
 const loadUserWithRole = async (userId, expectedRole) => {
@@ -180,7 +226,15 @@ exports.staffCheckIn = async (req, res) => {
       throw createHttpError(400, 'QR payload is required', 'missing_qr_payload');
     }
 
-    const { classData, qrPayload } = await ensureClassWithQr(req.params.classId, qrValue, 'staff_check');
+    const { classData, qrPayload, now } = await ensureClassWithQr(
+      req.params.classId,
+      qrValue,
+      'staff_check',
+      {
+        allowedStatuses: ['scheduled', 'waiting_pt'],
+        enforceCheckInWindow: true
+      }
+    );
 
     if (classData.staffId.toString() !== staff._id.toString()) {
       throw createHttpError(403, 'You are not assigned to this class', 'staff_not_assigned');
@@ -203,15 +257,15 @@ exports.staffCheckIn = async (req, res) => {
       });
     }
 
-    attendance.checkInAt = new Date();
+    attendance.checkInAt = now;
     attendance.checkInMethod = 'qr';
     attendance.checkInToken = qrPayload.token;
+    applyCheckInMetrics(attendance, classData, now);
     await attendance.save();
 
-    if (classData.status === 'scheduled') {
-      classData.status = 'ongoing';
-      classData.updatedAt = new Date();
-      await classData.save();
+    const updatedStatus = await updateClassLifecycleStatus(classData._id, now);
+    if (updatedStatus) {
+      classData.status = updatedStatus;
     }
 
     logSuccess(context, 'PT check-in thành công', {
@@ -258,11 +312,16 @@ exports.staffCheckOut = async (req, res) => {
       throw createHttpError(400, 'QR payload is required', 'missing_qr_payload');
     }
 
-    const { classData, qrPayload } = await ensureClassWithQr(
+    const { classData, qrPayload, now } = await ensureClassWithQr(
       req.params.classId,
       qrValue,
       'staff_check',
-      { allowAfterEnd: true, maxMinutesAfterEnd: DEFAULT_CHECKOUT_GRACE_MINUTES }
+      {
+        allowAfterEnd: true,
+        maxMinutesAfterEnd: DEFAULT_CHECKOUT_GRACE_MINUTES,
+        allowedStatuses: ['on_going', 'waiting_checkout', 'overdue'],
+        enforceCheckInWindow: false
+      }
     );
 
     if (classData.staffId.toString() !== staff._id.toString()) {
@@ -282,10 +341,16 @@ exports.staffCheckOut = async (req, res) => {
       throw createHttpError(409, 'Check-out already recorded for this class', 'duplicate_checkout');
     }
 
-    attendance.checkOutAt = new Date();
+    attendance.checkOutAt = now;
     attendance.checkOutMethod = 'qr';
     attendance.checkOutToken = qrPayload.token;
+    applyCheckOutMetrics(attendance, classData, now);
     await attendance.save();
+
+    const updatedStatus = await updateClassLifecycleStatus(classData._id, now);
+    if (updatedStatus) {
+      classData.status = updatedStatus;
+    }
 
     logSuccess(context, 'PT check-out thành công', {
       classId: classData._id,
@@ -331,7 +396,15 @@ exports.customerCheckIn = async (req, res) => {
       throw createHttpError(400, 'QR payload is required', 'missing_qr_payload');
     }
 
-    const { classData, qrPayload } = await ensureClassWithQr(req.params.classId, qrValue, 'customer_check');
+    const { classData, qrPayload, now } = await ensureClassWithQr(
+      req.params.classId,
+      qrValue,
+      'customer_check',
+      {
+        allowedStatuses: ['scheduled', 'waiting_pt', 'on_going_waiting_customers', 'on_going'],
+        enforceCheckInWindow: true
+      }
+    );
 
     const enrollment = await Enrollment.findOne({
       userId: customer._id,
@@ -360,9 +433,10 @@ exports.customerCheckIn = async (req, res) => {
       });
     }
 
-    attendance.checkInAt = new Date();
+    attendance.checkInAt = now;
     attendance.checkInMethod = 'qr';
     attendance.checkInToken = qrPayload.token;
+    applyCheckInMetrics(attendance, classData, now);
     await attendance.save();
 
     logSuccess(context, 'Customer check-in thành công', {
@@ -409,11 +483,15 @@ exports.customerCheckOut = async (req, res) => {
       throw createHttpError(400, 'QR payload is required', 'missing_qr_payload');
     }
 
-    const { classData, qrPayload } = await ensureClassWithQr(
+    const { classData, qrPayload, now } = await ensureClassWithQr(
       req.params.classId,
       qrValue,
       'customer_check',
-      { allowAfterEnd: true, maxMinutesAfterEnd: DEFAULT_CHECKOUT_GRACE_MINUTES }
+      {
+        allowAfterEnd: true,
+        maxMinutesAfterEnd: DEFAULT_CHECKOUT_GRACE_MINUTES,
+        allowedStatuses: ['on_going', 'waiting_checkout', 'overdue']
+      }
     );
 
     const attendance = await ClassAttendance.findOne({
@@ -429,10 +507,16 @@ exports.customerCheckOut = async (req, res) => {
       throw createHttpError(409, 'Check-out already recorded for this class', 'duplicate_checkout');
     }
 
-    attendance.checkOutAt = new Date();
+    attendance.checkOutAt = now;
     attendance.checkOutMethod = 'qr';
     attendance.checkOutToken = qrPayload.token;
+    applyCheckOutMetrics(attendance, classData, now);
     await attendance.save();
+
+    const updatedStatus = await updateClassLifecycleStatus(classData._id, now);
+    if (updatedStatus) {
+      classData.status = updatedStatus;
+    }
 
     logSuccess(context, 'Customer check-out thành công', {
       classId: classData._id,
