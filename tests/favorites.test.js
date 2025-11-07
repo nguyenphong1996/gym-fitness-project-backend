@@ -1,5 +1,9 @@
 require('dotenv').config();
 
+if (!process.env.CLOUDINARY_URL) {
+  process.env.CLOUDINARY_URL = 'cloudinary://demo:demo@demo';
+}
+
 const mongoose = require('mongoose');
 const { MongoMemoryServer } = require('mongodb-memory-server');
 
