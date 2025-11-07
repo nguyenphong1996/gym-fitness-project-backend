@@ -65,6 +65,53 @@ const calculateCheckInWindowStart = (classData, graceMinutes = DEFAULT_CHECKIN_G
   return windowStart;
 };
 
+const promoteClassToWaitingPtIfNeeded = async (
+  classData,
+  now = new Date(),
+  options = {}
+) => {
+  if (!classData) {
+    return null;
+  }
+
+  const {
+    allowedStatuses = [],
+    checkInGraceMinutes = DEFAULT_CHECKIN_GRACE_MINUTES
+  } = options;
+
+  const effectiveAllowedStatuses = allowedStatuses.length > 0
+    ? allowedStatuses
+    : ['scheduled', 'waiting_pt'];
+
+  if (
+    classData.status !== 'scheduled' ||
+    !effectiveAllowedStatuses.includes('waiting_pt')
+  ) {
+    return classData;
+  }
+
+  const windowStart = calculateCheckInWindowStart(classData, checkInGraceMinutes);
+  if (!windowStart || now < windowStart) {
+    return classData;
+  }
+
+  classData.status = 'waiting_pt';
+  classData.updatedAt = now;
+  await classData.save();
+
+  logDebug(
+    'classAttendanceController.promoteClassToWaitingPtIfNeeded',
+    'Class promoted to waiting_pt as check-in window opened',
+    {
+      classId: classData._id,
+      previousStatus: 'scheduled',
+      updatedAt: now.toISOString()
+    }
+  );
+
+  return classData;
+};
+
 const toDate = (value) => {
   if (!value) return null;
   if (value instanceof Date) return value;
