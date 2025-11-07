@@ -10,6 +10,7 @@ const staffRoutes = require('./routes/staff');
 const adminUserRoutes = require('./routes/adminUser');
 const classRoutes = require('./routes/class');
 const enrollmentRoutes = require('./routes/enrollment');
+const customerVideoRoutes = require('./routes/customerVideoFavorites');
 const videoRoutes = require('./routes/video');
 const staffClassAttendanceRoutes = require('./routes/staffClassAttendance');
 
@@ -27,6 +28,7 @@ apiRouter.use('/admin/staff', staffRoutes);
 apiRouter.use('/admin/users', adminUserRoutes);
 apiRouter.use('/admin/classes', classRoutes);
 apiRouter.use('/staff/classes', staffClassAttendanceRoutes);
+apiRouter.use('/customer/videos', customerVideoRoutes);
 apiRouter.use('/customer', enrollmentRoutes);
 apiRouter.use('/videos', videoRoutes);
 
