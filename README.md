@@ -13,6 +13,7 @@ Backend API - Xác thực OTP qua SMS, Quản lý User Profile, Class Management
 - `POST /api/auth/login` - Gửi OTP đăng nhập
 - `POST /api/auth/verify-login` - Xác thực OTP & đăng nhập
 
+
 ### User Profile Endpoints:
 - `GET /api/user/profile` - Lấy thông tin profile (JWT required)
 - `PUT /api/user/profile` - Cập nhật profile: name, email, avatarUrl, gender, dob, weight, height (JWT required)
