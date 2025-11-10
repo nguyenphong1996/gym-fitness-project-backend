@@ -1,0 +1,659 @@
+const express = require('express');
+const router = express.Router();
+const multer = require('multer');
+const path = require('path');
+const os = require('os');
+const fs = require('fs');
+const authMiddleware = require('../middlewares/authMiddleware');
+const adminMiddleware = require('../middlewares/adminMiddleware');
+const { uploadVideoFile, getAllVideos, getVideoById, deleteVideoById, getSubcategoriesByCategory } = require('../controllers/videoController');
+
+// Tạo thư mục tạm nếu không tồn tại
+const uploadDir = process.env.UPLOAD_DIR || path.join(os.tmpdir(), 'gymxfit-uploads');
+if (!fs.existsSync(uploadDir)) {
+  fs.mkdirSync(uploadDir, { recursive: true });
+}
+
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, uploadDir);
+  },
+  filename: (req, file, cb) => {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+    cb(null, file.fieldname + '-' + uniqueSuffix + path.extname(file.originalname));
+  }
+});
+
+const upload = multer({
+  storage: storage,
+  fileFilter: (req, file, cb) => {
+    const allowedMimes = ['video/mp4', 'video/mpeg', 'video/quicktime', 'video/webm'];
+    if (allowedMimes.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only video files allowed (MP4, MPEG, MOV, WEBM)'), false);
+    }
+  },
+  limits: { fileSize: 100 * 1024 * 1024 }
+});
+
+/**
+ * @swagger
+ * tags:
+ *   name: Videos
+ *   description: Quản lý video workout, streaming HLS
+ */
+
+/**
+ * @swagger
+ * /api/videos/upload:
+ *   post:
+ *     summary: Upload video workout mới (Admin only)
+ *     operationId: uploadVideo
+ *     tags: [Videos]
+ *     security:
+ *       - bearerAuth: []
+ *     description: |
+ *       Upload video workout lên Cloudinary với HLS streaming.
+ *       
+ *       ✅ **Yêu cầu:**
+ *       - Authorization: Bearer token (Admin role)
+ *       - Multipart form data với file video
+ *       - Title, estimated_calories, category, subcategory bắt buộc
+ *       
+ *       🎬 **Tính năng tự động:**
+ *       - Duration được trích xuất tự động từ metadata video bởi Cloudinary
+ *       - Thumbnail 300x200px từ frame đầu
+ *       - HLS m3u8 streaming URL được tạo sẵn
+ *       - Validation: subcategory phải match category
+ *       
+ *       📋 **Định dạng hỗ trợ:**
+ *       - MP4, MPEG, MOV, WEBM
+ *       - Max: 100MB
+ *       
+ *       🏷️ **Category và Subcategory:**
+ *       | Category | Subcategories |
+ *       |----------|---------------|
+ *       | **workout** | Upper Body, Lower Body, Back, Legs, Full Body, Core, Chest, Shoulders, Arms, Glutes |
+ *       | **cardio** | Running, Cycling, Jump Rope, HIIT, Dance, Swimming, Rowing, Elliptical |
+ *       | **stretching** | Flexibility, Mobility, Dynamic Stretch, Static Stretch, Yoga Stretches, Recovery |
+ *       | **nutrition** | Meal Prep, Recipes, Nutrition Tips, Supplements, Diet Plans, Hydration |
+ *       | **yoga** | Hatha Yoga, Vinyasa Yoga, Power Yoga, Yin Yoga, Ashtanga Yoga, Beginner Yoga |
+ *       | **other** | General, Tips, Motivation, Education |
+ *       
+ *       **⚡ Frontend flow:**
+ *       1. User chọn category → Call `GET /api/videos/subcategories/{category}`
+ *       2. Backend trả danh sách subcategories
+ *       3. Populate dropdown subcategory
+ *       4. User chọn subcategory + upload video
+ *       
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - video
+ *               - title
+ *               - estimated_calories
+ *               - category
+ *               - subcategory
+ *             properties:
+ *               video:
+ *                 type: string
+ *                 format: binary
+ *                 description: Video file (MP4, MPEG, MOV, WEBM), max 100MB
+ *               title:
+ *                 type: string
+ *                 minLength: 1
+ *                 maxLength: 200
+ *                 example: "Full Body HIIT Workout"
+ *                 description: Tên video (bắt buộc)
+ *               estimated_calories:
+ *                 type: number
+ *                 minimum: 0
+ *                 example: 350
+ *                 description: Ước tính calories đốt cháy (bắt buộc)
+ *               category:
+ *                 type: string
+ *                 enum: ["workout", "nutrition", "stretching", "cardio", "yoga", "other"]
+ *                 example: "workout"
+ *                 description: |
+ *                   Loại video (bắt buộc).
+ *                   Xem bảng category-subcategory ở trên để biết subcategories phù hợp.
+ *               subcategory:
+ *                 type: string
+ *                 example: "Upper Body"
+ *                 description: |
+ *                   Chi tiết loại video (bắt buộc).
+ *                   ⚠️ **Phải match category được chọn!**
+ *                   
+ *                   Ví dụ:
+ *                   - Nếu category = "workout" → subcategory phải là: Upper Body, Lower Body, Back, Legs, Full Body, Core, Chest, Shoulders, Arms, hoặc Glutes
+ *                   - Nếu category = "cardio" → subcategory phải là: Running, Cycling, Jump Rope, HIIT, Dance, Swimming, Rowing, hoặc Elliptical
+ *                   
+ *                   🔗 **Frontend:**
+ *                   1. Khi user chọn category, call endpoint: GET /api/videos/subcategories/{category}
+ *                   2. Parse response data.subcategories
+ *                   3. Populate dropdown subcategory với danh sách này
+ *     responses:
+ *       201:
+ *         description: Upload thành công - Video sẵn sàng phát stream
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 message:
+ *                   type: string
+ *                   example: "Video uploaded"
+ *                 video:
+ *                   type: object
+ *                   properties:
+ *                     id:
+ *                       type: string
+ *                       pattern: '^[0-9a-f]{24}$'
+ *                       example: "68eff234c8db2a37df681570"
+ *                       description: MongoDB ObjectId (24 ký tự hex)
+ *                     title:
+ *                       type: string
+ *                       example: "Full Body HIIT Workout"
+ *                     duration:
+ *                       type: number
+ *                       example: 1800
+ *                       description: Thời lượng video (giây) - từ Cloudinary
+ *                     estimated_calories:
+ *                       type: number
+ *                       example: 350
+ *                     category:
+ *                       type: string
+ *                       example: "cardio"
+ *                     subcategory:
+ *                       type: string
+ *                       example: "HIIT"
+ *       400:
+ *         description: Bad Request - Dữ liệu không hợp lệ
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: false
+ *                 message:
+ *                   type: string
+ *                   example: "Title and estimated calories required"
+ *                   description: "Lỗi có thể là: Video file required | Title and estimated calories required | Only video files allowed (MP4, MPEG, MOV, WEBM)"
+ *       401:
+ *         description: Unauthorized - Token không hợp lệ hoặc hết hạn
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "Unauthorized"
+ *       403:
+ *         description: Forbidden - Chỉ admin mới được upload
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "Forbidden - Admin access required"
+ *                 yourRole:
+ *                   type: string
+ *                   example: "customer"
+ *       413:
+ *         description: Payload Too Large - File vượt quá 100MB
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "File too large"
+ *       500:
+ *         description: Internal Server Error - Lỗi upload Cloudinary
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: false
+ *                 message:
+ *                   type: string
+ *                   example: "Upload failed"
+ *                 error:
+ *                   type: string
+ *                   example: "Cloudinary error message"
+ */
+router.post('/upload', adminMiddleware, upload.single('video'), uploadVideoFile);
+
+/**
+ * @swagger
+ * /api/videos:
+ *   get:
+ *     summary: Danh sách video workout (Pagination, Filter, Search)
+ *     operationId: getAllVideos
+ *     tags: [Videos]
+ *     description: |
+ *       Lấy danh sách tất cả video workout với các tính năng:
+ *       
+ *       📖 **Pagination:** Chia trang, điều chỉnh số lượng
+ *       🏷️ **Filter:** Lọc theo loại video (category)
+ *       🔍 **Search:** Tìm kiếm theo tên video
+ *       📅 **Sorting:** Sắp xếp theo mới nhất trước
+ *       
+ *       **Response:** Trả về danh sách video với thumbnail, không cần auth
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *           default: 1
+ *         description: Số trang (bắt đầu từ 1)
+ *         example: 1
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *           maximum: 50
+ *           default: 10
+ *         description: Số video mỗi trang (1-50)
+ *         example: 10
+ *       - in: query
+ *         name: category
+ *         schema:
+ *           type: string
+ *           enum: ["workout", "nutrition", "stretching", "cardio", "yoga", "other"]
+ *         description: Lọc theo loại video
+ *         example: "cardio"
+ *       - in: query
+ *         name: subcategory
+ *         schema:
+ *           type: string
+ *           enum: 
+ *             - "Upper Body"
+ *             - "Lower Body"
+ *             - "Back"
+ *             - "Legs"
+ *             - "Full Body"
+ *             - "Core"
+ *             - "Chest"
+ *             - "Shoulders"
+ *             - "Arms"
+ *             - "Glutes"
+ *             - "Running"
+ *             - "Cycling"
+ *             - "Jump Rope"
+ *             - "HIIT"
+ *             - "Dance"
+ *             - "Swimming"
+ *             - "Rowing"
+ *             - "Elliptical"
+ *             - "Flexibility"
+ *             - "Mobility"
+ *             - "Dynamic Stretch"
+ *             - "Static Stretch"
+ *             - "Yoga Stretches"
+ *             - "Recovery"
+ *             - "Meal Prep"
+ *             - "Recipes"
+ *             - "Nutrition Tips"
+ *             - "Supplements"
+ *             - "Diet Plans"
+ *             - "Hydration"
+ *             - "Hatha Yoga"
+ *             - "Vinyasa Yoga"
+ *             - "Power Yoga"
+ *             - "Yin Yoga"
+ *             - "Ashtanga Yoga"
+ *             - "Beginner Yoga"
+ *             - "General"
+ *             - "Tips"
+ *             - "Motivation"
+ *             - "Education"
+ *         description: Lọc theo chi tiết loại video
+ *         example: "Upper Body"
+ *       - in: query
+ *         name: search
+ *         schema:
+ *           type: string
+ *         description: Tìm kiếm theo title video
+ *         example: "HIIT"
+ *     responses:
+ *       200:
+ *         description: Danh sách videos thành công
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 videos:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       id:
+ *                         type: string
+ *                         pattern: '^[0-9a-f]{24}$'
+ *                         description: MongoDB ObjectId (24 ký tự hex)
+ *                         example: "68eff234c8db2a37df681570"
+ *                       title:
+ *                         type: string
+ *                         example: "Full Body HIIT"
+ *                       thumbnail:
+ *                         type: string
+ *                         format: uri
+ *                         description: URL thumbnail 300x200px
+ *                         example: "https://res.cloudinary.com/.../c_thumb,h_200,w_300/video.jpg"
+ *                       duration:
+ *                         type: number
+ *                         description: Thời lượng video (giây)
+ *                         example: 1800
+ *                       estimated_calories:
+ *                         type: number
+ *                         description: Ước tính kcal đốt cháy
+ *                         example: 350
+ *                       category:
+ *                         type: string
+ *                         example: "cardio"
+ *                       subcategory:
+ *                         type: string
+ *                         example: "upper_body"
+ *                       views:
+ *                         type: number
+ *                         description: Số lượt xem
+ *                         example: 42
+ *                 total:
+ *                   type: number
+ *                   description: Tổng số video (sau filter)
+ *                   example: 45
+ *                 page:
+ *                   type: number
+ *                   description: Trang hiện tại
+ *                   example: 1
+ *                 pages:
+ *                   type: number
+ *                   description: Tổng số trang
+ *                   example: 5
+ *       500:
+ *         description: Internal Server Error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: false
+ *                 message:
+ *                   type: string
+ *                   example: "Get videos failed"
+ */
+router.get('/', getAllVideos);
+
+/**
+ * @swagger
+ * /api/videos/{id}:
+ *   get:
+ *     summary: Lấy chi tiết video + URL streaming HLS
+ *     operationId: getVideoById
+ *     tags: [Videos]
+ *     description: |
+ *       Lấy thông tin chi tiết video, URL streaming HLS (m3u8) để phát stream.
+ *       
+ *       ✨ **Tính năng tự động:**
+ *       - 👁️ Auto increment views mỗi lần truy cập
+ *       - 🎬 Trả về URL streaming HLS (m3u8) cho phát progressive
+ *       - 🖼️ Thumbnail 300x200px
+ *       
+ *       **Authentication:** Không cần token
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           pattern: '^[0-9a-f]{24}$'
+ *         description: Video ID (MongoDB ObjectId - 24 ký tự hex)
+ *         example: "68eff234c8db2a37df681570"
+ *     responses:
+ *       200:
+ *         description: Chi tiết video + URL streaming thành công
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 video:
+ *                   type: object
+ *                   properties:
+ *                     id:
+ *                       type: string
+ *                       pattern: '^[0-9a-f]{24}$'
+ *                       description: MongoDB ObjectId (24 ký tự hex)
+ *                       example: "68eff234c8db2a37df681570"
+ *                     title:
+ *                       type: string
+ *                       example: "Full Body HIIT"
+ *                     thumbnail:
+ *                       type: string
+ *                       format: uri
+ *                       description: URL thumbnail 300x200px
+ *                       example: "https://res.cloudinary.com/.../c_thumb,h_200,w_300/video.jpg"
+ *                     streaming_url:
+ *                       type: string
+ *                       format: uri
+ *                       description: URL HLS m3u8 để stream video (progressive playback)
+ *                       example: "https://res.cloudinary.com/.../master.m3u8"
+ *                     duration:
+ *                       type: number
+ *                       description: Thời lượng video (giây)
+ *                       example: 1800
+ *                     estimated_calories:
+ *                       type: number
+ *                       description: Ước tính kcal đốt cháy
+ *                       example: 350
+ *                     category:
+ *                       type: string
+ *                       example: "cardio"
+ *                     subcategory:
+ *                       type: string
+ *                       example: "upper_body"
+ *                     views:
+ *                       type: number
+ *                       description: Số lượt xem (auto increment)
+ *                       example: 43
+ *       404:
+ *         description: Video không tồn tại
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: false
+ *                 message:
+ *                   type: string
+ *                   example: "Video not found"
+ *       500:
+ *         description: Internal Server Error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: false
+ *                 message:
+ *                   type: string
+ *                   example: "Get video failed"
+ *   delete:
+ *     summary: Xóa video (Admin only)
+ *     operationId: deleteVideoById
+ *     tags: [Videos]
+ *     security:
+ *       - bearerAuth: []
+ *     description: |
+ *       Xóa video khỏi hệ thống.
+ *       
+ *       ⚠️ **Yêu cầu:** 
+ *       - Authorization: Bearer token (Admin role)
+ *       - Chỉ admin mới có quyền xóa
+ *       
+ *       🗑️ **Tính năng tự động:**
+ *       - Xóa file từ Cloudinary (dọn dẹp dung lượng)
+ *       - Xóa record từ MongoDB
+ *       - Không thể hoàn tác
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           pattern: '^[0-9a-f]{24}$'
+ *         description: Video ID (MongoDB ObjectId - 24 ký tự hex)
+ *         example: "68eff234c8db2a37df681570"
+ *     responses:
+ *       200:
+ *         description: Xóa thành công
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 message:
+ *                   type: string
+ *                   example: "Video deleted"
+ *       401:
+ *         description: Unauthorized - Token không hợp lệ hoặc hết hạn
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "Unauthorized"
+ *       403:
+ *         description: Forbidden - Chỉ admin mới được xóa
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "Forbidden - Admin access required"
+ *                 yourRole:
+ *                   type: string
+ *                   example: "customer"
+ *       404:
+ *         description: Video không tồn tại
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: false
+ *                 message:
+ *                   type: string
+ *                   example: "Video not found"
+ *       500:
+ *         description: Internal Server Error - Lỗi server hoặc xóa Cloudinary thất bại
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: false
+                 message:
+                   type: string
+                   example: "Delete failed"
+ */
+router.get('/:id', getVideoById);
+router.delete('/:id', adminMiddleware, deleteVideoById);
+
+/**
+ * @swagger
+ * /api/videos/subcategories/{category}:
+ *   get:
+ *     summary: Lấy danh sách subcategories theo category
+ *     operationId: getSubcategoriesByCategory
+ *     tags: [Videos]
+ *     description: Lấy danh sách subcategories phù hợp với category được chọn. Dùng để populate dropdown khi tạo/upload video.
+ *     parameters:
+ *       - in: path
+ *         name: category
+ *         required: true
+ *         schema:
+ *           type: string
+ *           enum: ["workout", "nutrition", "stretching", "cardio", "yoga", "other"]
+ *         description: Loại video
+ *         example: "workout"
+ *     responses:
+ *       200:
+ *         description: Danh sách subcategories thành công
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 category:
+ *                   type: string
+ *                   example: "workout"
+ *                 subcategories:
+ *                   type: array
+ *                   items:
+ *                     type: string
+ *                   example: ["Upper Body", "Lower Body", "Back", "Legs", "Full Body", "Core", "Chest", "Shoulders", "Arms", "Glutes"]
+ *       400:
+ *         description: Category không hợp lệ
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: false
+ *                 message:
+ *                   type: string
+ *                   example: "Invalid category"
+ */
+router.get('/subcategories/:category', getSubcategoriesByCategory);
+
+module.exports = router;
