@@ -194,14 +194,14 @@ jobs:
         context: .
         push: true
         tags: |
-          ${{ secrets.DOCKERHUB_USERNAME }}/gymxfit:be
-          ${{ secrets.DOCKERHUB_USERNAME }}/gymxfit:be-${{ github.sha }}
+          ${{ secrets.DOCKERHUB_USERNAME }}/gymxfit:latest
+          ${{ secrets.DOCKERHUB_USERNAME }}/gymxfit:${{ github.sha }}
         cache-from: type=gha
         cache-to: type=gha,mode=max
 
     - name: Image pushed
       run: |
-        echo "Image pushed: ${{ secrets.DOCKERHUB_USERNAME }}/gymxfit:be and ${{ secrets.DOCKERHUB_USERNAME }}/gymxfit:be-${{ github.sha }}"
+        echo "Image pushed: ${{ secrets.DOCKERHUB_USERNAME }}/gymxfit:latest and ${{ secrets.DOCKERHUB_USERNAME }}/gymxfit:${{ github.sha }}"
 
   deploy:
     name: Deploy to Server
