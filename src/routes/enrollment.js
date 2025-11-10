@@ -5,8 +5,7 @@ const enrollmentController = require('../controllers/enrollmentController');
 const authMiddleware = require('../middlewares/authMiddleware');
 const adminMiddleware = require('../middlewares/adminMiddleware');
 const {
-  customerCheckIn,
-  customerCheckOut
+  customerAttendanceScan
 } = require('../controllers/classAttendanceController');
 
 /**
@@ -162,11 +161,15 @@ router.post('/classes/:classId/enroll', authMiddleware, enrollmentController.enr
 
 /**
  * @swagger
- * /api/customer/classes/{classId}/check-in:
+ * /api/customer/classes/{classId}/attendance/scan:
  *   post:
  *     tags: [Class Enrollment]
- *     summary: Customer check-in lớp học bằng QR code
- *     operationId: customerClassCheckIn
+ *     summary: Quét QR điểm danh (tự động check-in/check-out)
+ *     description: |
+ *       Người dùng chỉ cần quét cùng một QR code khi vào lớp và khi ra về.
+ *       - Lần quét **đầu tiên** được ghi nhận làm **check-in** và sẽ không bao giờ bị ghi đè.
+ *       - Các lần quét **tiếp theo** sẽ cập nhật **check-out**, luôn giữ thời điểm của lần quét cuối cùng.
+ *     operationId: customerClassAttendanceScan
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -192,69 +195,25 @@ router.post('/classes/:classId/enroll', authMiddleware, enrollmentController.enr
  *                 example: '{"classId":"507f1f77bcf86cd799439013","token":"abcd1234","type":"class_check","generatedAt":"2025-01-01T08:00:00.000Z"}'
  *     responses:
  *       200:
- *         description: Ghi nhận check-in thành công
+ *         description: Ghi nhận điểm danh thành công (message sẽ cho biết là check-in hay check-out)
  *       400:
- *         description: QR code không hợp lệ hoặc chưa check-in được
+ *         description: QR code không hợp lệ hoặc chưa đến cửa sổ check-in
  *       401:
  *         description: Thiếu token đăng nhập
  *       403:
- *         description: Người dùng chưa đăng ký lớp này
+ *         description: Người dùng chưa đăng ký lớp này hoặc không có quyền
  *       409:
- *         description: Đã check-in trước đó hoặc lớp đã kết thúc
+ *         description: Lớp đã kết thúc và quá thời hạn check-out
  *       404:
  *         description: Không tìm thấy lớp hoặc QR code tương ứng
  *       500:
- *         description: Lỗi hệ thống khi ghi nhận check-in
+ *         description: Lỗi hệ thống khi ghi nhận điểm danh
  */
-router.post('/classes/:classId/check-in', authMiddleware, customerCheckIn);
+router.post('/classes/:classId/attendance/scan', authMiddleware, customerAttendanceScan);
 
-/**
- * @swagger
- * /api/customer/classes/{classId}/check-out:
- *   post:
- *     tags: [Class Enrollment]
- *     summary: Customer check-out lớp học bằng QR code
- *     operationId: customerClassCheckOut
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: classId
- *         required: true
- *         schema:
- *           type: string
- *           pattern: '^[0-9a-f]{24}$'
- *         description: ID lớp học
- *         example: "507f1f77bcf86cd799439013"
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required: [qrValue]
- *             properties:
- *               qrValue:
- *                 type: string
- *                 description: Payload JSON đọc được từ QR code lớp
- *                 example: '{"classId":"507f1f77bcf86cd799439013","token":"abcd1234","type":"class_check","generatedAt":"2025-01-01T08:00:00.000Z"}'
- *     responses:
- *       200:
- *         description: Ghi nhận check-out thành công
- *       400:
- *         description: Chưa check-in hoặc QR code không hợp lệ
- *       401:
- *         description: Thiếu token đăng nhập
- *       403:
- *         description: Không có quyền check-out lớp này
- *       409:
- *         description: Đã check-out trước đó hoặc đã quá thời gian cho phép sau khi lớp kết thúc
- *       404:
- *         description: Không tìm thấy lớp hoặc QR code tương ứng
- *       500:
- *         description: Lỗi hệ thống khi ghi nhận check-out
- */
-router.post('/classes/:classId/check-out', authMiddleware, customerCheckOut);
+// Legacy routes (giữ để tương thích, dùng chung logic scan)
+router.post('/classes/:classId/check-in', authMiddleware, customerAttendanceScan);
+router.post('/classes/:classId/check-out', authMiddleware, customerAttendanceScan);
 
 /**
  * @swagger
@@ -948,41 +907,113 @@ router.patch('/enrollments/:enrollmentId/cancel', authMiddleware, enrollmentCont
  *                   type: boolean
  *                   example: true
  *                 data:
- *                   type: array
- *                   items:
- *                     type: object
- *                     properties:
- *                       id:
- *                         type: string
- *                         example: "58f5c0eb2a6d0c1a8f9b4c2e"
- *                       customerId:
+ *                   type: object
+ *                   properties:
+ *                     classId:
+ *                       type: string
+ *                       example: "58f5c0eb2a6d0c1a8f9b4c2e"
+ *                     className:
+ *                       type: string
+ *                       example: "Morning HIIT"
+ *                     classStatus:
+ *                       type: string
+ *                       example: "on_going"
+ *                     capacity:
+ *                       type: integer
+ *                       example: 20
+ *                     currentEnrollment:
+ *                       type: integer
+ *                       example: 12
+ *                     availableSlots:
+ *                       type: integer
+ *                       example: 8
+ *                     startTime:
+ *                       type: string
+ *                       format: date-time
+ *                     endTime:
+ *                       type: string
+ *                       format: date-time
+ *                     location:
+ *                       type: string
+ *                       example: "Saigon Studio"
+ *                     staff:
+ *                       type: object
+ *                       nullable: true
+ *                       properties:
+ *                         staffId: { type: string }
+ *                         name: { type: string }
+ *                         email: { type: string }
+ *                         phone: { type: string }
+ *                         checkInAt:
+ *                           type: string
+ *                           format: date-time
+ *                           nullable: true
+ *                         checkOutAt:
+ *                           type: string
+ *                           format: date-time
+ *                           nullable: true
+ *                         checkInMethod:
+ *                           type: string
+ *                           nullable: true
+ *                         checkOutMethod:
+ *                           type: string
+ *                           nullable: true
+ *                     stats:
+ *                       type: object
+ *                       properties:
+ *                         capacity:
+ *                           type: integer
+ *                           example: 20
+ *                         registered:
+ *                           type: integer
+ *                           example: 12
+ *                         checkedIn:
+ *                           type: integer
+ *                           example: 5
+ *                         checkedOut:
+ *                           type: integer
+ *                           example: 3
+ *                     enrollments:
+ *                       type: array
+ *                       items:
  *                         type: object
  *                         properties:
- *                           id:
+ *                           enrollmentId:
  *                             type: string
- *                           name:
+ *                             example: "58f5c0eb2a6d0c1a8f9b4c2e"
+ *                           user:
+ *                             type: object
+ *                             nullable: true
+ *                             properties:
+ *                               userId: { type: string }
+ *                               name: { type: string }
+ *                               email: { type: string }
+ *                               phone: { type: string }
+ *                           status:
  *                             type: string
- *                           phone:
+ *                             enum: ["active", "completed", "cancelled"]
+ *                             example: "active"
+ *                           enrolledAt:
  *                             type: string
- *                             example: "0912345678"
- *                       classId:
- *                         type: string
- *                         example: "58f5c0eb2a6d0c1a8f9b4c2e"
- *                       status:
- *                         type: string
- *                         example: "active"
- *                         enum: ["active", "completed", "cancelled"]
- *                       enrolledAt:
- *                         type: string
- *                         format: date-time
- *                         example: "2025-10-23T10:30:00Z"
- *                       cancellationReason:
- *                         type: string
- *                         example: null
- *                       cancelledAt:
- *                         type: string
- *                         format: date-time
- *                         example: null
+ *                             format: date-time
+ *                           cancelledAt:
+ *                             type: string
+ *                             format: date-time
+ *                             nullable: true
+ *                           checkInAt:
+ *                             type: string
+ *                             format: date-time
+ *                             nullable: true
+ *                           checkOutAt:
+ *                             type: string
+ *                             format: date-time
+ *                             nullable: true
+ *                           checkInMethod:
+ *                             type: string
+ *                             nullable: true
+ *                           checkOutMethod:
+ *                             type: string
+ *                             nullable: true
  *                 pagination:
  *                   type: object
  *                   properties:

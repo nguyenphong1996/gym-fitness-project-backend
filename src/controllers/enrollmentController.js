@@ -2,6 +2,7 @@
 const Enrollment = require('../models/Enrollment');
 const Class = require('../models/Class');
 const User = require('../models/User');
+const ClassAttendance = require('../models/ClassAttendance');
 const logger = require('../utils/logger');
 
 /**
@@ -20,8 +21,9 @@ exports.enrollClass = async (req, res) => {
       });
     }
 
-    // Kiểm tra class có tồn tại không
-    const classData = await Class.findById(classId);
+    // Kiểm tra class có tồn tại không và lấy thông tin staff
+    const classData = await Class.findById(classId)
+      .populate('staffId', 'name email phone role');
     if (!classData) {
       return res.status(404).json({
         success: false,
@@ -545,7 +547,8 @@ exports.getClassEnrollments = async (req, res) => {
     }
 
     // Kiểm tra class có tồn tại không
-    const classData = await Class.findById(classId);
+    const classData = await Class.findById(classId)
+      .populate('staffId', 'name email phone role');
     if (!classData) {
       return res.status(404).json({
         success: false,
@@ -566,16 +569,66 @@ exports.getClassEnrollments = async (req, res) => {
     }
 
     // Pagination
-    const skip = (parseInt(page) - 1) * parseInt(limit);
+    const pageNum = parseInt(page, 10) || 1;
+    const limitNum = parseInt(limit, 10) || 10;
+    const skip = (pageNum - 1) * limitNum;
 
-    // Fetch enrollments
-    const enrollments = await Enrollment.find(filter)
-      .populate('userId', 'name email phone')
-      .sort({ enrolledAt: -1 })
-      .skip(skip)
-      .limit(parseInt(limit));
+    if (pageNum < 1 || limitNum < 1 || limitNum > 100) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid pagination parameters'
+      });
+    }
 
-    const total = await Enrollment.countDocuments(filter);
+    // Fetch enrollments, total count và attendance song song
+    const [enrollments, total, attendanceRecords] = await Promise.all([
+      Enrollment.find(filter)
+        .populate('userId', 'name email phone')
+        .sort({ enrolledAt: -1 })
+        .skip(skip)
+        .limit(limitNum),
+      Enrollment.countDocuments(filter),
+      ClassAttendance.find({ classId })
+        .select('userId role checkInAt checkOutAt checkInMethod checkOutMethod')
+    ]);
+
+    // Build attendance map
+    let staffAttendance = null;
+    const customerAttendanceMap = new Map();
+
+    attendanceRecords.forEach(record => {
+      if (record.role === 'staff') {
+        if (!staffAttendance || record.userId?.toString() === classData.staffId?._id?.toString()) {
+          staffAttendance = record;
+        }
+      } else if (record.role === 'customer' && record.userId) {
+        customerAttendanceMap.set(record.userId.toString(), record);
+      }
+    });
+
+    const customerAttendanceList = attendanceRecords.filter(record => record.role === 'customer');
+
+    const enrollmentsData = enrollments.map(enrollment => {
+      const user = enrollment.userId;
+      const attendance = user ? customerAttendanceMap.get(user._id.toString()) : null;
+
+      return {
+        enrollmentId: enrollment._id,
+        user: user ? {
+          userId: user._id,
+          name: user.name,
+          email: user.email,
+          phone: user.phone
+        } : null,
+        status: enrollment.status,
+        enrolledAt: enrollment.enrolledAt,
+        cancelledAt: enrollment.cancelledAt,
+        checkInAt: attendance?.checkInAt || null,
+        checkOutAt: attendance?.checkOutAt || null,
+        checkInMethod: attendance?.checkInMethod || null,
+        checkOutMethod: attendance?.checkOutMethod || null
+      };
+    });
 
     return res.status(200).json({
       success: true,
@@ -583,24 +636,36 @@ exports.getClassEnrollments = async (req, res) => {
       data: {
         classId: classData._id,
         className: classData.name,
-        enrollments: enrollments.map(enrollment => ({
-          enrollmentId: enrollment._id,
-          user: {
-            userId: enrollment.userId._id,
-            name: enrollment.userId.name,
-            email: enrollment.userId.email,
-            phone: enrollment.userId.phone
-          },
-          status: enrollment.status,
-          enrolledAt: enrollment.enrolledAt,
-          cancelledAt: enrollment.cancelledAt
-        }))
+        classStatus: classData.status,
+        capacity: classData.capacity,
+        currentEnrollment: classData.currentEnrollment,
+        availableSlots: Math.max(0, classData.capacity - classData.currentEnrollment),
+        startTime: classData.startTime,
+        endTime: classData.endTime,
+        location: classData.location,
+        staff: classData.staffId ? {
+          staffId: classData.staffId._id,
+          name: classData.staffId.name,
+          email: classData.staffId.email,
+          phone: classData.staffId.phone,
+          checkInAt: staffAttendance?.checkInAt || null,
+          checkOutAt: staffAttendance?.checkOutAt || null,
+          checkInMethod: staffAttendance?.checkInMethod || null,
+          checkOutMethod: staffAttendance?.checkOutMethod || null
+        } : null,
+        stats: {
+          capacity: classData.capacity,
+          registered: classData.currentEnrollment,
+          checkedIn: customerAttendanceList.filter(record => Boolean(record.checkInAt)).length,
+          checkedOut: customerAttendanceList.filter(record => Boolean(record.checkOutAt)).length
+        },
+        enrollments: enrollmentsData
       },
       pagination: {
         total,
-        page: parseInt(page),
-        limit: parseInt(limit),
-        pages: Math.ceil(total / parseInt(limit))
+        page: pageNum,
+        limit: limitNum,
+        pages: Math.ceil(total / limitNum)
       }
     });
   } catch (error) {
