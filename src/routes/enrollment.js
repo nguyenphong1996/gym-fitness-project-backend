@@ -907,41 +907,113 @@ router.patch('/enrollments/:enrollmentId/cancel', authMiddleware, enrollmentCont
  *                   type: boolean
  *                   example: true
  *                 data:
- *                   type: array
- *                   items:
- *                     type: object
- *                     properties:
- *                       id:
- *                         type: string
- *                         example: "58f5c0eb2a6d0c1a8f9b4c2e"
- *                       customerId:
+ *                   type: object
+ *                   properties:
+ *                     classId:
+ *                       type: string
+ *                       example: "58f5c0eb2a6d0c1a8f9b4c2e"
+ *                     className:
+ *                       type: string
+ *                       example: "Morning HIIT"
+ *                     classStatus:
+ *                       type: string
+ *                       example: "on_going"
+ *                     capacity:
+ *                       type: integer
+ *                       example: 20
+ *                     currentEnrollment:
+ *                       type: integer
+ *                       example: 12
+ *                     availableSlots:
+ *                       type: integer
+ *                       example: 8
+ *                     startTime:
+ *                       type: string
+ *                       format: date-time
+ *                     endTime:
+ *                       type: string
+ *                       format: date-time
+ *                     location:
+ *                       type: string
+ *                       example: "Saigon Studio"
+ *                     staff:
+ *                       type: object
+ *                       nullable: true
+ *                       properties:
+ *                         staffId: { type: string }
+ *                         name: { type: string }
+ *                         email: { type: string }
+ *                         phone: { type: string }
+ *                         checkInAt:
+ *                           type: string
+ *                           format: date-time
+ *                           nullable: true
+ *                         checkOutAt:
+ *                           type: string
+ *                           format: date-time
+ *                           nullable: true
+ *                         checkInMethod:
+ *                           type: string
+ *                           nullable: true
+ *                         checkOutMethod:
+ *                           type: string
+ *                           nullable: true
+ *                     stats:
+ *                       type: object
+ *                       properties:
+ *                         capacity:
+ *                           type: integer
+ *                           example: 20
+ *                         registered:
+ *                           type: integer
+ *                           example: 12
+ *                         checkedIn:
+ *                           type: integer
+ *                           example: 5
+ *                         checkedOut:
+ *                           type: integer
+ *                           example: 3
+ *                     enrollments:
+ *                       type: array
+ *                       items:
  *                         type: object
  *                         properties:
- *                           id:
+ *                           enrollmentId:
  *                             type: string
- *                           name:
+ *                             example: "58f5c0eb2a6d0c1a8f9b4c2e"
+ *                           user:
+ *                             type: object
+ *                             nullable: true
+ *                             properties:
+ *                               userId: { type: string }
+ *                               name: { type: string }
+ *                               email: { type: string }
+ *                               phone: { type: string }
+ *                           status:
  *                             type: string
- *                           phone:
+ *                             enum: ["active", "completed", "cancelled"]
+ *                             example: "active"
+ *                           enrolledAt:
  *                             type: string
- *                             example: "0912345678"
- *                       classId:
- *                         type: string
- *                         example: "58f5c0eb2a6d0c1a8f9b4c2e"
- *                       status:
- *                         type: string
- *                         example: "active"
- *                         enum: ["active", "completed", "cancelled"]
- *                       enrolledAt:
- *                         type: string
- *                         format: date-time
- *                         example: "2025-10-23T10:30:00Z"
- *                       cancellationReason:
- *                         type: string
- *                         example: null
- *                       cancelledAt:
- *                         type: string
- *                         format: date-time
- *                         example: null
+ *                             format: date-time
+ *                           cancelledAt:
+ *                             type: string
+ *                             format: date-time
+ *                             nullable: true
+ *                           checkInAt:
+ *                             type: string
+ *                             format: date-time
+ *                             nullable: true
+ *                           checkOutAt:
+ *                             type: string
+ *                             format: date-time
+ *                             nullable: true
+ *                           checkInMethod:
+ *                             type: string
+ *                             nullable: true
+ *                           checkOutMethod:
+ *                             type: string
+ *                             nullable: true
  *                 pagination:
  *                   type: object
  *                   properties:
