@@ -3,7 +3,11 @@ const mongoose = require('mongoose');
 
 const OtpLogSchema = new mongoose.Schema({
   phone: { type: String, required: true, index: true },
-  type: { type: String, enum: ['register', 'login', 'delete_account'], default: 'register' },
+  type: { 
+    type: String, 
+    enum: ['register', 'login', 'delete_account', 'staff_first_login', 'staff_login'], 
+    default: 'register' 
+  },
   sessionId: { type: String },
   smsId: { type: String },
   apiResult: { type: mongoose.Schema.Types.Mixed },

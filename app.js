@@ -20,6 +20,7 @@ var authRouter = require('./src/routes/auth');
 var userRouter = require('./src/routes/user');
 var videoRouter = require('./src/routes/video');
 var staffRouter = require('./src/routes/staff');
+var staffAuthRouter = require('./src/routes/staffAuth');
 var adminUserRouter = require('./src/routes/adminUser');
 var classRouter = require('./src/routes/class');
 var enrollmentRouter = require('./src/routes/enrollment');
@@ -111,6 +112,7 @@ if (swaggerUi && swaggerSpec) {
 app.use('/', indexRouter);
 app.use('/users', usersRouter);
 app.use('/api/auth', authRouter);
+app.use('/api/staff/auth', staffAuthRouter);
 app.use('/api/user', userRouter);
 app.use('/api/videos', videoRouter);
 app.use('/api/admin/staff', staffRouter);

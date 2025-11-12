@@ -13,6 +13,14 @@ Backend API - Xác thực OTP qua SMS, Quản lý User Profile, Class Management
 - `POST /api/auth/login` - Gửi OTP đăng nhập
 - `POST /api/auth/verify-login` - Xác thực OTP & đăng nhập
 
+### Staff Authentication (PT self-service):
+- `POST /api/staff/auth/request-otp` - PT yêu cầu OTP cho `first_login` hoặc `login`
+  - Body: `{ phone, purpose: "first_login" | "login" }`
+  - Trả về sessionId, expiresIn, dev_otp (sandbox)
+- `POST /api/staff/auth/verify-otp` - PT xác thực OTP & nhận JWT
+  - Body: `{ phone, code, purpose }`
+  - Response: `{ token, user: { id, phone, role, isVerified, isActive } }`
+
 
 ### User Profile Endpoints:
 - `GET /api/user/profile` - Lấy thông tin profile (JWT required)
@@ -112,6 +120,7 @@ src/
 ├── routes/          # API endpoints with Swagger docs
 │   ├── auth.js      # Authentication endpoints
 │   ├── user.js      # User profile endpoints
+│   ├── staffAuth.js # Staff OTP authentication endpoints
 │   ├── staff.js     # Staff (PT) management endpoints
 │   ├── class.js     # Class management endpoints
 │   ├── enrollment.js # Class enrollment endpoints
