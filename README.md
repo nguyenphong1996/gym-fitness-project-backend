@@ -21,6 +21,12 @@ Backend API - Xác thực OTP qua SMS, Quản lý User Profile, Class Management
   - Body: `{ phone, code, purpose }`
   - Response: `{ token, user: { id, phone, role, isVerified, isActive } }`
 
+### Staff Self-Service Profile:
+- `GET /api/staff/profile` - Lấy thông tin hồ sơ + trạng thái yêu cầu kỹ năng (JWT staff)
+- `PUT /api/staff/profile` - Cập nhật name/email/gender/dob/weight/height (JWT staff)
+- `PUT /api/staff/profile/avatar` - Upload avatar mới (multipart/form-data, JWT staff)
+- `PUT /api/staff/profile/skills` - Gửi yêu cầu cập nhật kỹ năng, chờ admin duyệt (JWT staff)
+
 
 ### User Profile Endpoints:
 - `GET /api/user/profile` - Lấy thông tin profile (JWT required)
@@ -41,7 +47,8 @@ Backend API - Xác thực OTP qua SMS, Quản lý User Profile, Class Management
   - Response: `{ data: { _id, phone, name, email, role, skills, skillsApprovedByAdmin, isActive, ... } }`
 - `PATCH /api/admin/staff/{staffId}/activate` - Kích hoạt tài khoản PT (JWT admin required)
 - `PATCH /api/admin/staff/{staffId}/deactivate` - Vô hiệu hóa tài khoản PT (JWT admin required)
-- `PATCH /api/admin/staff/{staffId}/skills/approve` - Xác nhận kỹ năng PT (JWT admin required)
+- `PATCH /api/admin/staff/{staffId}/skills/approve` - Duyệt kỹ năng PT (từ yêu cầu pending hoặc payload)
+- `PATCH /api/admin/staff/{staffId}/skills/reject` - Từ chối yêu cầu cập nhật kỹ năng PT (JWT admin required)
 
 ### Class Management Endpoints (Admin only):
 - `POST /api/admin/classes/create` - Tạo lớp học mới (JWT admin required)
@@ -121,6 +128,7 @@ src/
 │   ├── auth.js      # Authentication endpoints
 │   ├── user.js      # User profile endpoints
 │   ├── staffAuth.js # Staff OTP authentication endpoints
+│   ├── staffProfile.js # Staff self-service profile endpoints
 │   ├── staff.js     # Staff (PT) management endpoints
 │   ├── class.js     # Class management endpoints
 │   ├── enrollment.js # Class enrollment endpoints

@@ -20,8 +20,8 @@ const { requestOtp, verifyOtp } = require('../controllers/staffAuthController');
  *     description: |
  *       Cho phép PT yêu cầu mã OTP để hoàn tất xác thực lần đầu hoặc đăng nhập những lần tiếp theo.
  *       
- *       - `purpose=first_login`: Dùng cho PT mới được admin tạo (isVerified=false)
- *       - `purpose=login`: Dùng cho PT đã hoàn tất verify
+ *       - `purpose=first_login`: Dùng cho PT mới được admin tạo (isVerified=false). Sau khi verify thành công, backend sẽ tự động đặt `isVerified=true`.
+ *       - `purpose=login`: Dùng cho các lần đăng nhập tiếp theo (chỉ hợp lệ khi tài khoản đã được verify). Nếu gọi khi chưa verify lần đầu, API trả lỗi `staff_not_verified`.
  *     requestBody:
  *       required: true
  *       content:
@@ -152,7 +152,9 @@ router.post('/request-otp', requestOtp);
  *     summary: Xác thực OTP và đăng nhập cho PT
  *     tags: [Staff Authentication]
  *     description: |
- *       Xác thực mã OTP đã gửi cho PT. Nếu là `first_login`, API sẽ tự động đánh dấu isVerified=true trước khi cấp token.
+ *       Xác thực mã OTP đã gửi cho PT.
+ *       - Với `purpose=first_login`: Dùng cho lần đăng nhập đầu tiên sau khi admin tạo tài khoản. OTP hợp lệ sẽ cập nhật `isVerified=true` trước khi sinh token.
+ *       - Với `purpose=login`: Dùng cho các lần đăng nhập tiếp theo. Nếu gọi khi chưa hoàn tất `first_login`, API trả về `staff_not_verified`.
  *     requestBody:
  *       required: true
  *       content:
