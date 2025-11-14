@@ -293,7 +293,17 @@ exports.staffCheckIn = async (req, res) => {
     });
 
     if (attendance?.checkInAt) {
-      throw createHttpError(409, 'Check-in already recorded for this class', 'duplicate_checkin');
+      logDebug(context, 'PT attempted to re-scan for check-in; keeping first timestamp', {
+        classId: classData._id,
+        staffId: staff._id,
+        originalCheckInAt: attendance.checkInAt
+      });
+
+      return res.status(200).json({
+        success: true,
+        message: 'Staff already checked in earlier; using first scan timestamp',
+        data: buildAttendanceResponse(attendance, classData)
+      });
     }
 
     if (!attendance) {
@@ -384,9 +394,8 @@ exports.staffCheckOut = async (req, res) => {
       throw createHttpError(400, 'Check-in must be recorded before check-out', 'missing_checkin');
     }
 
-    if (attendance.checkOutAt) {
-      throw createHttpError(409, 'Check-out already recorded for this class', 'duplicate_checkout');
-    }
+    const hadPreviousCheckOut = Boolean(attendance.checkOutAt);
+    const previousCheckOutAt = attendance.checkOutAt;
 
     attendance.checkOutAt = now;
     attendance.checkOutMethod = 'qr';
@@ -399,15 +408,24 @@ exports.staffCheckOut = async (req, res) => {
       classData.status = updatedStatus;
     }
 
-    logSuccess(context, 'PT check-out thành công', {
-      classId: classData._id,
-      staffId: staff._id,
-      attendanceId: attendance._id
-    });
+    logSuccess(
+      context,
+      hadPreviousCheckOut
+        ? 'PT check-out timestamp updated with latest scan'
+        : 'PT check-out thành công',
+      {
+        classId: classData._id,
+        staffId: staff._id,
+        attendanceId: attendance._id,
+        previousCheckOutAt
+      }
+    );
 
     return res.status(200).json({
       success: true,
-      message: 'Staff check-out recorded successfully',
+      message: hadPreviousCheckOut
+        ? 'Staff check-out updated to latest scan timestamp'
+        : 'Staff check-out recorded successfully',
       data: buildAttendanceResponse(attendance, classData)
     });
   } catch (error) {
@@ -653,6 +671,52 @@ exports.customerAttendanceScan = async (req, res) => {
       success: false,
       error: error.code || 'server_error',
       message: error.message || 'Failed to record attendance scan'
+    });
+  }
+};
+
+exports.staffAttendanceScan = async (req, res) => {
+  const context = 'classAttendanceController.staffAttendanceScan';
+  try {
+    const validation = validateObjectId(req.params.classId, {
+      required: true,
+      fieldName: 'Class ID'
+    });
+
+    if (!validation.valid) {
+      return res.status(400).json({
+        success: false,
+        error: validation.error || 'invalid_class_id',
+        message: validation.message
+      });
+    }
+
+    const attendance = await ClassAttendance.findOne({
+      classId: validation.id,
+      userId: req.user.id
+    });
+
+    if (!attendance || !attendance.checkInAt) {
+      logDebug(context, 'Delegating scan to staff check-in handler', {
+        classId: validation.id,
+        staffId: req.user.id
+      });
+      return exports.staffCheckIn(req, res);
+    }
+
+    logDebug(context, 'Delegating scan to staff check-out handler', {
+      classId: validation.id,
+      staffId: req.user.id,
+      checkInAt: attendance.checkInAt,
+      previousCheckOutAt: attendance.checkOutAt
+    });
+    return exports.staffCheckOut(req, res);
+  } catch (error) {
+    logError(context, 'Lỗi khi xử lý staff attendance scan', error);
+    return res.status(500).json({
+      success: false,
+      error: error.code || 'server_error',
+      message: error.message || 'Failed to record staff attendance scan'
     });
   }
 };

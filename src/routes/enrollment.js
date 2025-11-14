@@ -195,19 +195,80 @@ router.post('/classes/:classId/enroll', authMiddleware, enrollmentController.enr
  *                 example: '{"classId":"507f1f77bcf86cd799439013","token":"abcd1234","type":"class_check","generatedAt":"2025-01-01T08:00:00.000Z"}'
  *     responses:
  *       200:
- *         description: Ghi nhận điểm danh thành công (message sẽ cho biết là check-in hay check-out)
+ *         description: Ghi nhận điểm danh thành công (trả về trạng thái check-in/check-out mới nhất)
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean, example: true }
+ *                 message: { type: string, example: "Check-in recorded" }
+ *                 attendance:
+ *                   type: object
+ *                   properties:
+ *                     checkInAt:
+ *                       type: string
+ *                       format: date-time
+ *                     checkOutAt:
+ *                       type: string
+ *                       format: date-time
+ *                     lastAction:
+ *                       type: string
+ *                       enum: [check_in, check_out]
  *       400:
  *         description: QR code không hợp lệ hoặc chưa đến cửa sổ check-in
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error: { type: string, example: "invalid_qr" }
+ *                 message: { type: string }
  *       401:
  *         description: Thiếu token đăng nhập
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error: { type: string, example: "unauthorized" }
+ *                 message: { type: string }
  *       403:
  *         description: Người dùng chưa đăng ký lớp này hoặc không có quyền
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error: { type: string, example: "not_enrolled" }
+ *                 message: { type: string }
  *       409:
  *         description: Lớp đã kết thúc và quá thời hạn check-out
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error: { type: string, example: "class_finished" }
+ *                 message: { type: string }
  *       404:
  *         description: Không tìm thấy lớp hoặc QR code tương ứng
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error: { type: string, example: "class_not_found" }
+ *                 message: { type: string }
  *       500:
  *         description: Lỗi hệ thống khi ghi nhận điểm danh
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error: { type: string, example: "server_error" }
+ *                 message: { type: string }
  */
 router.post('/classes/:classId/attendance/scan', authMiddleware, customerAttendanceScan);
 
