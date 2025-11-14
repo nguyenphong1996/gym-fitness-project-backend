@@ -26,6 +26,7 @@ Backend API - Xác thực OTP qua SMS, Quản lý User Profile, Class Management
 - `PUT /api/staff/profile` - Cập nhật name/email/gender/dob/weight/height (JWT staff)
 - `PUT /api/staff/profile/avatar` - Upload avatar mới (multipart/form-data, JWT staff)
 - `PUT /api/staff/profile/skills` - Gửi yêu cầu cập nhật kỹ năng, chờ admin duyệt (JWT staff)
+- `GET /api/staff/bookings` - PT xem lịch book riêng (lọc theo ngày/from/to)
 
 
 ### User Profile Endpoints:
@@ -129,6 +130,7 @@ src/
 │   ├── user.js      # User profile endpoints
 │   ├── staffAuth.js # Staff OTP authentication endpoints
 │   ├── staffProfile.js # Staff self-service profile endpoints
+│   ├── customerPtBooking.js # Customer PT booking endpoints
 │   ├── staff.js     # Staff (PT) management endpoints
 │   ├── class.js     # Class management endpoints
 │   ├── enrollment.js # Class enrollment endpoints
@@ -139,3 +141,7 @@ src/
     └── validation.js
 
 ```
+- `GET /api/customer/pt/availability` - Xem lịch trống của 1 PT (JWT customer)
+- `POST /api/customer/pt/bookings` - Đặt ca 2h (08-20h, nghỉ 12-14h)
+- `GET /api/customer/pt/bookings` - Danh sách lịch đã book (lọc upcoming/history/cancelled)
+- `DELETE /api/customer/pt/bookings/{bookingId}` - Huỷ booking trước giờ bắt đầu

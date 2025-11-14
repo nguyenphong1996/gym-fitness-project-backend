@@ -14,6 +14,7 @@ const {
   requestSkillUpdate,
   updateAvatar
 } = require('../controllers/staffProfileController');
+const { getStaffBookings } = require('../controllers/staffBookingController');
 
 const uploadDir = process.env.UPLOAD_AVATAR_DIR || path.join(os.tmpdir(), 'gymxfit-avatars');
 if (!fs.existsSync(uploadDir)) {
@@ -195,6 +196,51 @@ router.get('/profile', authMiddleware, staffMiddleware, getProfile);
  *         description: Lỗi hệ thống
  */
 router.put('/profile', authMiddleware, staffMiddleware, updateProfile);
+
+/**
+ * @swagger
+ * /api/staff/bookings:
+ *   get:
+ *     summary: Lịch booking cá nhân của PT
+ *     tags: [Staff Profile]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: date
+ *         schema:
+ *           type: string
+ *           example: "2025-10-26"
+ *         description: Lọc theo ngày (UTC). Nếu có `date`, bỏ qua `from/to`.
+ *       - in: query
+ *         name: from
+ *         schema:
+ *           type: string
+ *           example: "2025-10-26"
+ *         description: Ngày bắt đầu (YYYY-MM-DD)
+ *       - in: query
+ *         name: to
+ *         schema:
+ *           type: string
+ *           example: "2025-10-30"
+ *         description: Ngày kết thúc (YYYY-MM-DD)
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: string
+ *           enum: [upcoming, history, cancelled, all]
+ *           default: upcoming
+ *     responses:
+ *       200:
+ *         description: Danh sách booking của PT
+ *       401:
+ *         description: Thiếu token
+ *       403:
+ *         description: Không phải PT
+ *       500:
+ *         description: Lỗi hệ thống
+ */
+router.get('/bookings', authMiddleware, staffMiddleware, getStaffBookings);
 
 /**
  * @swagger

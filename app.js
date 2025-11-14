@@ -22,6 +22,7 @@ var videoRouter = require('./src/routes/video');
 var staffRouter = require('./src/routes/staff');
 var staffAuthRouter = require('./src/routes/staffAuth');
 var staffProfileRouter = require('./src/routes/staffProfile');
+var customerPtBookingRouter = require('./src/routes/customerPtBooking');
 var adminUserRouter = require('./src/routes/adminUser');
 var classRouter = require('./src/routes/class');
 var enrollmentRouter = require('./src/routes/enrollment');
@@ -121,6 +122,7 @@ app.use('/api/admin/staff', staffRouter);
 app.use('/api/admin/users', adminUserRouter);
 app.use('/api/admin/classes', classRouter);
 app.use('/api/customer/videos', customerVideoFavoritesRouter);
+app.use('/api/customer/pt', customerPtBookingRouter);
 app.use('/api/customer', enrollmentRouter);
 
 /**
