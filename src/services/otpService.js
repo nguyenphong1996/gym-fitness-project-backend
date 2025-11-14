@@ -57,6 +57,10 @@ function getOtpContent(type, otp, brandName) {
       return `${otp} la ma xac minh dang ky ${safeBrandName} cua ban`;
     case 'login':
       return `${otp} la ma xac minh dang nhap ${safeBrandName} cua ban`;
+    case 'staff_first_login':
+      return `${otp} la ma kich hoat tai khoan PT ${safeBrandName}`;
+    case 'staff_login':
+      return `${otp} la ma xac minh dang nhap PT ${safeBrandName}`;
     case 'delete_account':
       return `${otp} la ma xac minh xoa tai khoan ${safeBrandName} cua ban`;
     default:

@@ -13,6 +13,21 @@ Backend API - Xác thực OTP qua SMS, Quản lý User Profile, Class Management
 - `POST /api/auth/login` - Gửi OTP đăng nhập
 - `POST /api/auth/verify-login` - Xác thực OTP & đăng nhập
 
+### Staff Authentication (PT self-service):
+- `POST /api/staff/auth/request-otp` - PT yêu cầu OTP cho `first_login` hoặc `login`
+  - Body: `{ phone, purpose: "first_login" | "login" }`
+  - Trả về sessionId, expiresIn, dev_otp (sandbox)
+- `POST /api/staff/auth/verify-otp` - PT xác thực OTP & nhận JWT
+  - Body: `{ phone, code, purpose }`
+  - Response: `{ token, user: { id, phone, role, isVerified, isActive } }`
+
+### Staff Self-Service Profile:
+- `GET /api/staff/profile` - Lấy thông tin hồ sơ + trạng thái yêu cầu kỹ năng (JWT staff)
+- `PUT /api/staff/profile` - Cập nhật name/email/gender/dob/weight/height (JWT staff)
+- `PUT /api/staff/profile/avatar` - Upload avatar mới (multipart/form-data, JWT staff)
+- `PUT /api/staff/profile/skills` - Gửi yêu cầu cập nhật kỹ năng, chờ admin duyệt (JWT staff)
+- `GET /api/staff/bookings` - PT xem lịch book riêng (lọc theo ngày/from/to)
+
 
 ### User Profile Endpoints:
 - `GET /api/user/profile` - Lấy thông tin profile (JWT required)
@@ -33,7 +48,8 @@ Backend API - Xác thực OTP qua SMS, Quản lý User Profile, Class Management
   - Response: `{ data: { _id, phone, name, email, role, skills, skillsApprovedByAdmin, isActive, ... } }`
 - `PATCH /api/admin/staff/{staffId}/activate` - Kích hoạt tài khoản PT (JWT admin required)
 - `PATCH /api/admin/staff/{staffId}/deactivate` - Vô hiệu hóa tài khoản PT (JWT admin required)
-- `PATCH /api/admin/staff/{staffId}/skills/approve` - Xác nhận kỹ năng PT (JWT admin required)
+- `PATCH /api/admin/staff/{staffId}/skills/approve` - Duyệt kỹ năng PT (từ yêu cầu pending hoặc payload)
+- `PATCH /api/admin/staff/{staffId}/skills/reject` - Từ chối yêu cầu cập nhật kỹ năng PT (JWT admin required)
 
 ### Class Management Endpoints (Admin only):
 - `POST /api/admin/classes/create` - Tạo lớp học mới (JWT admin required)
@@ -112,6 +128,9 @@ src/
 ├── routes/          # API endpoints with Swagger docs
 │   ├── auth.js      # Authentication endpoints
 │   ├── user.js      # User profile endpoints
+│   ├── staffAuth.js # Staff OTP authentication endpoints
+│   ├── staffProfile.js # Staff self-service profile endpoints
+│   ├── customerPtBooking.js # Customer PT booking endpoints
 │   ├── staff.js     # Staff (PT) management endpoints
 │   ├── class.js     # Class management endpoints
 │   ├── enrollment.js # Class enrollment endpoints
@@ -122,3 +141,7 @@ src/
     └── validation.js
 
 ```
+- `GET /api/customer/pt/availability` - Xem lịch trống của 1 PT (JWT customer)
+- `POST /api/customer/pt/bookings` - Đặt ca 2h (08-20h, nghỉ 12-14h)
+- `GET /api/customer/pt/bookings` - Danh sách lịch đã book (lọc upcoming/history/cancelled)
+- `DELETE /api/customer/pt/bookings/{bookingId}` - Huỷ booking trước giờ bắt đầu

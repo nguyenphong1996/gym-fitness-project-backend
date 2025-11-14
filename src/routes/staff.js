@@ -15,6 +15,7 @@ const {
   activateStaff,
   deactivateStaff,
   approveStaffSkills,
+  rejectStaffSkills,
   updateStaffAvatar
 } = require('../controllers/staffController');
 
@@ -849,14 +850,14 @@ router.patch('/:staffId/deactivate', authMiddleware, adminMiddleware, deactivate
  * @swagger
  * /api/admin/staff/{staffId}/skills/approve:
  *   patch:
- *     summary: Xác nhận skills của PT (Admin only)
+ *     summary: Duyệt kỹ năng PT
  *     operationId: approveStaffSkills
  *     tags: [Staff (PT)]
  *     security:
  *       - bearerAuth: []
  *     description: |
- *       Admin xác nhận skills của PT. 
- *       Sau khi xác nhận, PT có thể được gán vào lớp học có skill tương ứng
+ *       - Nếu PT đã gửi yêu cầu cập nhật kỹ năng (pending) thì admin chỉ cần gọi endpoint này để duyệt.
+ *       - Nếu chưa có yêu cầu pending, admin có thể truyền `skills` trực tiếp trong payload để cập nhật và duyệt ngay.
  *     parameters:
  *       - in: path
  *         name: staffId
@@ -864,9 +865,26 @@ router.patch('/:staffId/deactivate', authMiddleware, adminMiddleware, deactivate
  *         schema:
  *           type: string
  *           pattern: '^[0-9a-f]{24}$'
+ *     requestBody:
+ *       required: false
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               skills:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *                   enum: [workout, cardio, stretching, nutrition, yoga, other]
+ *                 description: |
+ *                   Chỉ bắt buộc khi không có yêu cầu pending từ PT.
+ *               adminNote:
+ *                 type: string
+ *                 example: "Đã xác nhận thêm kỹ năng Yoga"
  *     responses:
  *       200:
- *         description: Xác nhận skills PT thành công
+ *         description: Duyệt kỹ năng thành công
  *         content:
  *           application/json:
  *             schema:
@@ -874,77 +892,76 @@ router.patch('/:staffId/deactivate', authMiddleware, adminMiddleware, deactivate
  *               properties:
  *                 success:
  *                   type: boolean
- *                   example: true
  *                 message:
  *                   type: string
- *                   example: "PT skills approved"
  *                 staff:
  *                   type: object
  *                   properties:
  *                     id:
  *                       type: string
- *                       example: "58f5c0eb2a6d0c1a8f9b4c2e"
  *                     phone:
  *                       type: string
- *                       example: "0912345678"
  *                     skills:
  *                       type: array
  *                       items:
  *                         type: string
- *                       example: ["yoga", "stretching"]
  *                     skillsApprovedByAdmin:
  *                       type: boolean
- *                       example: true
- *                       description: Skills đã được admin approve
- *       404:
- *         description: PT not found - Không tìm thấy PT
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                   example: false
- *                 message:
- *                   type: string
- *                   example: "PT not found"
+ *                     skillUpdateRequest:
+ *                       type: object
+ *       400:
+ *         description: Không có yêu cầu pending và payload không chứa skills hợp lệ
  *       401:
- *         description: Unauthorized - Token không hợp lệ hoặc hết hạn
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 message:
- *                   type: string
- *                   example: "Unauthorized"
+ *         description: Token không hợp lệ
  *       403:
- *         description: Forbidden - Chỉ admin mới được truy cập
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 message:
- *                   type: string
- *                   example: "Forbidden - Admin access required"
+ *         description: Không phải admin
+ *       404:
+ *         description: Không tìm thấy PT
  *       500:
- *         description: Server error - Lỗi hệ thống
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                   example: false
- *                 message:
- *                   type: string
- *                   example: "Failed to approve PT skills"
- *                 error:
- *                   type: string
+ *         description: Lỗi hệ thống
  */
 router.patch('/:staffId/skills/approve', authMiddleware, adminMiddleware, approveStaffSkills);
+
+/**
+ * @swagger
+ * /api/admin/staff/{staffId}/skills/reject:
+ *   patch:
+ *     summary: Từ chối yêu cầu cập nhật kỹ năng của PT
+ *     operationId: rejectStaffSkills
+ *     tags: [Staff (PT)]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: staffId
+ *         required: true
+ *         schema:
+ *           type: string
+ *           pattern: '^[0-9a-f]{24}$'
+ *     requestBody:
+ *       required: false
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               note:
+ *                 type: string
+ *                 example: "Thiếu chứng chỉ bổ sung"
+ *     responses:
+ *       200:
+ *         description: Từ chối thành công
+ *       400:
+ *         description: Không có yêu cầu pending để từ chối
+ *       401:
+ *         description: Token không hợp lệ
+ *       403:
+ *         description: Không phải admin
+ *       404:
+ *         description: Không tìm thấy PT
+ *       500:
+ *         description: Lỗi hệ thống
+ */
+router.patch('/:staffId/skills/reject', authMiddleware, adminMiddleware, rejectStaffSkills);
 
 module.exports = router;

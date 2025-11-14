@@ -41,6 +41,17 @@ const UserSchema = new mongoose.Schema({
     documentUrl: { type: String }
   }],
   hireDate: { type: Date }, // Ngày tuyển dụng PT
+  skillUpdateRequest: {
+    skills: [{
+      type: String,
+      enum: ['workout', 'cardio', 'stretching', 'nutrition', 'yoga', 'other']
+    }],
+    status: { type: String, enum: ['pending', 'approved', 'rejected'], default: null },
+    requestedAt: { type: Date },
+    reviewedAt: { type: Date },
+    reviewedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    adminNote: { type: String, trim: true, maxlength: 500 }
+  },
 
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now }
