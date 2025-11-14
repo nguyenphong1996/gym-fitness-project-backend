@@ -124,12 +124,40 @@ const upload = multer({
  *                       type: boolean
  *       401:
  *         description: Thiếu hoặc token không hợp lệ
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error: { type: string, example: "unauthorized" }
+ *                 message: { type: string }
  *       403:
  *         description: Không phải tài khoản PT
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error: { type: string, example: "forbidden" }
+ *                 message: { type: string }
  *       404:
  *         description: Không tìm thấy hồ sơ PT
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error: { type: string, example: "staff_not_found" }
+ *                 message: { type: string }
  *       500:
  *         description: Lỗi hệ thống
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error: { type: string, example: "server_error" }
+ *                 message: { type: string }
  */
 router.get('/profile', authMiddleware, staffMiddleware, getProfile);
 
@@ -184,16 +212,58 @@ router.get('/profile', authMiddleware, staffMiddleware, getProfile);
  *                   example: "Profile updated successfully"
  *       400:
  *         description: Payload không hợp lệ hoặc không có trường nào được cập nhật
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error: { type: string, example: "invalid_field" }
+ *                 message: { type: string }
  *       401:
  *         description: Thiếu token
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error: { type: string, example: "unauthorized" }
+ *                 message: { type: string }
  *       403:
  *         description: Không phải tài khoản PT
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error: { type: string, example: "forbidden" }
+ *                 message: { type: string }
  *       404:
  *         description: Không tìm thấy hồ sơ
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error: { type: string, example: "staff_not_found" }
+ *                 message: { type: string }
  *       409:
  *         description: Email đã tồn tại
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error: { type: string, example: "email_taken" }
+ *                 message: { type: string }
  *       500:
  *         description: Lỗi hệ thống
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error: { type: string, example: "server_error" }
+ *                 message: { type: string }
  */
 router.put('/profile', authMiddleware, staffMiddleware, updateProfile);
 
@@ -233,12 +303,64 @@ router.put('/profile', authMiddleware, staffMiddleware, updateProfile);
  *     responses:
  *       200:
  *         description: Danh sách booking của PT
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean }
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       id: { type: string }
+ *                       slotKey: { type: string, example: "14:00-16:00" }
+ *                       startTime: { type: string, format: date-time }
+ *                       endTime: { type: string, format: date-time }
+ *                       status: { type: string, example: "confirmed" }
+ *                       notes: { type: string, nullable: true }
+ *                       customer:
+ *                         type: object
+ *                         nullable: true
+ *                         properties:
+ *                           id: { type: string }
+ *                           name: { type: string }
+ *                           phone: { type: string }
+ *                 pagination:
+ *                   type: object
+ *                   properties:
+ *                     total: { type: integer }
+ *                     page: { type: integer }
+ *                     limit: { type: integer }
+ *                     pages: { type: integer }
  *       401:
  *         description: Thiếu token
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error: { type: string, example: "unauthorized" }
+ *                 message: { type: string }
  *       403:
  *         description: Không phải PT
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error: { type: string, example: "forbidden" }
+ *                 message: { type: string }
  *       500:
  *         description: Lỗi hệ thống
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error: { type: string, example: "server_error" }
+ *                 message: { type: string }
  */
 router.get('/bookings', authMiddleware, staffMiddleware, getStaffBookings);
 
@@ -283,12 +405,26 @@ router.get('/bookings', authMiddleware, staffMiddleware, getStaffBookings);
  *                   example: "https://res.cloudinary.com/.../avatar.jpg"
  *       400:
  *         description: Thiếu file hoặc sai định dạng
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error: { type: string, example: "file_missing" }
+ *                 message: { type: string }
  *       401:
  *         description: Thiếu token
  *       403:
  *         description: Không phải tài khoản PT
  *       404:
  *         description: Không tìm thấy hồ sơ
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error: { type: string, example: "staff_not_found" }
+ *                 message: { type: string }
  *       500:
  *         description: Lỗi hệ thống
  */
@@ -346,14 +482,35 @@ router.put('/profile/avatar', authMiddleware, staffMiddleware, upload.single('av
  *                       format: date-time
  *       400:
  *         description: Dữ liệu kỹ năng không hợp lệ hoặc không thay đổi
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error: { type: string, example: "invalid_skills_value" }
+ *                 message: { type: string }
  *       401:
  *         description: Thiếu token
  *       403:
  *         description: Không phải PT
  *       404:
  *         description: Không tìm thấy hồ sơ
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error: { type: string, example: "staff_not_found" }
+ *                 message: { type: string }
  *       409:
  *         description: Đã có yêu cầu pending
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error: { type: string, example: "skill_request_pending" }
+ *                 message: { type: string }
  *       500:
  *         description: Lỗi hệ thống
  */
