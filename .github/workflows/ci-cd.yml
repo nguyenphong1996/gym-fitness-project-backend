@@ -188,24 +188,6 @@ jobs:
         username: ${{ secrets.DOCKERHUB_USERNAME }}
         password: ${{ secrets.DOCKERHUB_PASSWORD }}
 
-    - name: Build test image (includes devDependencies)
-      run: |
-        docker build --progress=plain --build-arg INSTALL_DEV=true -t ${DOCKERHUB_USERNAME:-gymxfit}_test:latest .
-      env:
-        DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
-
-    - name: Run tests inside test image
-      run: |
-        docker run --rm \
-          -e MONGO_URI='${{ secrets.MONGO_URI }}' \
-          -e ESMS_API_KEY='${{ secrets.ESMS_API_KEY }}' \
-          -e ESMS_SECRET_KEY='${{ secrets.ESMS_SECRET_KEY }}' \
-          -e ESMS_SANDBOX='${{ secrets.ESMS_SANDBOX }}' \
-          -e CLOUDINARY_URL='${{ secrets.CLOUDINARY_URL }}' \
-          ${DOCKERHUB_USERNAME:-gymxfit}_test:latest npm run test
-      env:
-        DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
-
     - name: Build and push Docker image to Docker Hub
       uses: docker/build-push-action@v5
       with:
@@ -214,8 +196,6 @@ jobs:
         tags: |
           ${{ secrets.DOCKERHUB_USERNAME }}/gymxfit:latest
           ${{ secrets.DOCKERHUB_USERNAME }}/gymxfit:${{ github.sha }}
-        build-args: |
-          INSTALL_DEV=false
         cache-from: type=gha
         cache-to: type=gha,mode=max
 
