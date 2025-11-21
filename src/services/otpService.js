@@ -133,7 +133,7 @@ exports.requestOtp = async (phone, type, ip) => {
   const otp = Math.floor(1000 + Math.random() * 9000).toString(); // Generate 4-digit OTP
   const content = getOtpContent(type, otp, ESMS_BRANDNAME);
 
-  const response = await axios.post(ESMS_SEND_URL, {
+  const payload = {
     ApiKey: ESMS_API_KEY,
     SecretKey: ESMS_SECRET_KEY,
     Phone: phone,
@@ -141,34 +141,45 @@ exports.requestOtp = async (phone, type, ip) => {
     Brandname: ESMS_BRANDNAME,
     SmsType: ESMS_SMS_TYPE,
     IsUnicode: '0'
-  }, {
-    headers: {
-      'Content-Type': 'application/json'
-    },
-    timeout: 10000
-  });
+  };
 
-  const data = response.data;
+  try {
+    logInfo('otpService.requestOtp', `Gửi OTP ${type} qua eSMS API cho: ${phone}`, payload);
+    
+    const response = await axios.post(ESMS_SEND_URL, payload, {
+      headers: { 'Content-Type': 'application/json' },
+      timeout: 10000
+    });
 
-  if (data.CodeResult !== '100') {
-    logError('otpService.requestOtp', `eSMS API trả về lỗi khi gửi OTP ${type}`, data);
-    await OtpLog.create({ phone, type, status: 'failed', apiResult: data, ip });
-    throw new OtpServiceError('Failed to send OTP. Please try again later.', {
+    const data = response.data;
+
+    if (data.CodeResult !== '100') {
+      logError('otpService.requestOtp', `eSMS API trả về lỗi khi gửi OTP ${type}`, data);
+      await OtpLog.create({ phone, type, status: 'failed', apiResult: data, ip });
+      throw new OtpServiceError('Failed to send OTP. Please try again later.', {
+        statusCode: 500,
+        code: 'sms_send_failed'
+      });
+    }
+
+    const sessionId = data.SMSID;
+    await OtpLog.create({ phone, type, sessionId, expiresAt, status: 'pending', apiResult: data, ip });
+    logSuccess('otpService.requestOtp', `Gửi OTP ${type} thành công cho: ${phone}`, { sessionId });
+
+    return {
+      ok: true,
+      message: 'OTP sent successfully to your phone',
+      sessionId,
+      expiresIn: parseInt(OTP_EXPIRATION_MINUTES) * 60
+    };
+  } catch (error) {
+    logError('otpService.requestOtp', `Lỗi nghiêm trọng khi gọi eSMS API cho OTP ${type}`, error);
+    await OtpLog.create({ phone, type, status: 'failed', apiResult: { error: error.message }, ip });
+    throw new OtpServiceError('Failed to send OTP due to a network or configuration error.', {
       statusCode: 500,
-      code: 'sms_send_failed'
+      code: 'sms_api_call_failed'
     });
   }
-
-  const sessionId = data.SMSID;
-  await OtpLog.create({ phone, type, sessionId, expiresAt, status: 'pending', apiResult: data, ip });
-  logSuccess('otpService.requestOtp', `Gửi OTP ${type} thành công cho: ${phone}`, { sessionId });
-
-  return {
-    ok: true,
-    message: 'OTP sent successfully to your phone',
-    sessionId,
-    expiresIn: parseInt(OTP_EXPIRATION_MINUTES) * 60
-  };
 };
 
 /**

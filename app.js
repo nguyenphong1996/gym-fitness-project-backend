@@ -106,7 +106,18 @@ app.use(createCorsMiddleware({
 
 // Swagger Documentation (skip if dependencies are not available)
 if (swaggerUi && swaggerSpec) {
-  app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+  // Serve JSON spec at /api-docs/swagger.json
+  app.get('/api-docs/swagger.json', (req, res) => {
+    res.setHeader('Content-Type', 'application/json');
+    res.send(swaggerSpec);
+  });
+
+  // Serve Swagger UI at /api-docs
+  app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
+    explorer: true,
+    customCss: '.swagger-ui .topbar .download-url-wrapper { display: none }',
+    customSiteTitle: 'Gym Fitness API Documentation'
+  }));
 } else if (!hasSwaggerUi || !hasSwaggerJsdoc) {
   console.warn('⚠️  Swagger dependencies missing - skipping /api-docs route');
 }
