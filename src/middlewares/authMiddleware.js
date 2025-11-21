@@ -24,6 +24,13 @@ const authMiddleware = async (req, res, next) => {
     // Extract token
     const token = authHeader.split(' ')[1];
 
+    if (!token) {
+      return res.status(401).json({ 
+        error: 'unauthorized',
+        message: 'No token provided. Please login first.' 
+      });
+    }
+
     if (!JWT_SECRET) {
       return res.status(500).json({ 
         error: 'server_error',
@@ -33,6 +40,13 @@ const authMiddleware = async (req, res, next) => {
 
     // Verify token
     const decoded = jwt.verify(token, JWT_SECRET);
+
+    if (!decoded || typeof decoded !== 'object' || !decoded.userId) {
+      return res.status(401).json({ 
+        error: 'unauthorized',
+        message: 'Invalid token payload' 
+      });
+    }
 
     // Find user
     const user = await User.findById(decoded.userId);
@@ -51,11 +65,20 @@ const authMiddleware = async (req, res, next) => {
       });
     }
 
+    if (!user.isActive) {
+      return res.status(403).json({
+        error: 'account_deactivated',
+        message: 'User account is deactivated'
+      });
+    }
+
     // Attach user to request object
     req.user = {
       id: user._id,
       phone: user.phone,
-      isVerified: user.isVerified
+      role: user.role,
+      isVerified: user.isVerified,
+      isActive: user.isActive
     };
 
     next();

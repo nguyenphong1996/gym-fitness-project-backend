@@ -45,7 +45,14 @@ const classSchema = new mongoose.Schema({
   currentEnrollment: {
     type: Number,
     default: 0,
-    min: 0
+    min: 0,
+    validate: {
+      validator(value) {
+        if (typeof this.capacity !== 'number') return true;
+        return value <= this.capacity;
+      },
+      message: 'currentEnrollment cannot exceed capacity'
+    }
   },
   
   // Giảng viên
@@ -58,7 +65,18 @@ const classSchema = new mongoose.Schema({
   // Trạng thái lớp học
   status: {
     type: String,
-    enum: ['draft', 'scheduled', 'ongoing', 'completed', 'cancelled'],
+    enum: [
+      'draft',
+      'scheduled',
+      'waiting_pt',
+      'on_going_waiting_customers',
+      'on_going',
+      'waiting_checkout',
+      'completed',
+      'expired',
+      'overdue',
+      'cancelled'
+    ],
     default: 'draft'
   },
   

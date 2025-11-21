@@ -1,4 +1,6 @@
 // tests/cloudinary.test.js
+require('dotenv').config();
+
 let cloudinary;
 try {
   cloudinary = require('cloudinary').v2;

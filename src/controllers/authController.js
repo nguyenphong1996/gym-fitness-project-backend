@@ -5,7 +5,7 @@ const jwt = require('jsonwebtoken');
 const { OtpServiceError } = require('../services/otpService');
 const otpService = require('../services/otpService');
 const { validatePhone, validateOtp } = require('../utils/validation');
-const { logError, logSuccess, logWarning, logDebug, logAuth } = require('../utils/logger');
+const { logError, logSuccess, logWarning, logDebug, logAuth, logInfo } = require('../utils/logger');
 
 const { JWT_SECRET, JWT_EXPIRES_IN = '12h' } = process.env;
 
@@ -57,11 +57,15 @@ exports.register = async (req, res) => {
 
     const existingUser = await User.findOne({ phone });
     if (existingUser && existingUser.isVerified) {
-      logWarning(context, `Số điện thoại đã đăng ký: ${phone}`);
-      return res.status(400).json({ 
-        error: 'phone_already_registered',
-        message: 'Phone number already registered. Please login instead.' 
-      });
+      if (existingUser.isActive) {
+        logWarning(context, `Số điện thoại đã đăng ký: ${phone}`);
+        return res.status(400).json({ 
+          error: 'phone_already_registered',
+          message: 'Phone number already registered. Please login instead.' 
+        });
+      }
+
+      logInfo(context, `Tài khoản đã đăng ký nhưng đang vô hiệu hóa, cho phép yêu cầu OTP re-activate: ${phone}`);
     }
 
     const result = await otpService.requestOtp(phone, 'register', req.ip);
@@ -107,6 +111,8 @@ exports.verifyRegister = async (req, res) => {
         logSuccess(context, `Tạo user mới: ${phone}`, { userId: user._id });
       } else {
         user.isVerified = true;
+        user.isActive = true;
+        user.deactivatedAt = null;
         await user.save();
         logSuccess(context, `Cập nhật user đã có: ${phone}`, { userId: user._id });
       }
@@ -158,6 +164,14 @@ exports.login = async (req, res) => {
       });
     }
 
+    if (!existingUser.isActive) {
+      logWarning(context, `Tài khoản đã vô hiệu hóa: ${phone}`);
+      return res.status(403).json({ 
+        error: 'account_deactivated',
+        message: 'Account is deactivated. Please contact support or re-register.' 
+      });
+    }
+
     const result = await otpService.requestOtp(phone, 'login', req.ip);
     return res.json(result);
 
@@ -196,6 +210,14 @@ exports.verifyLogin = async (req, res) => {
     if (!user || !user.isVerified) {
       logWarning(context, `User không tồn tại hoặc chưa xác thực: ${phone}`);
       return res.status(404).json({ error: 'user_not_found', message: 'User not found or not verified' });
+    }
+
+    if (!user.isActive) {
+      logWarning(context, `User đã vô hiệu hóa cố gắng đăng nhập: ${phone}`);
+      return res.status(403).json({ 
+        error: 'account_deactivated',
+        message: 'Account is deactivated. Please contact support or re-register.' 
+      });
     }
 
     const isVerified = await otpService.verifyOtp(phone, code, 'login');

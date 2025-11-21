@@ -2,14 +2,15 @@
 // controllers/userController.js
 const fs = require('fs').promises;
 const User = require('../models/User');
+const OtpLog = require('../models/OtpLog');
 const { OtpServiceError } = require('../services/otpService');
 const otpService = require('../services/otpService');
 const { uploadImage, deleteResource } = require('../utils/cloudinary');
 const { validateProfileUpdate, validateOtp } = require('../utils/validation');
 const { logError, logSuccess, logWarning, logDebug, logUserAction, logAvatarUpload } = require('../utils/logger');
 
-function handleOtpError(res, err, context, phone) {
-  logWarning(context, err.message, { code: err.code, phone });
+function handleOtpError(res, err, context) {
+  logWarning(context, err.message, { code: err.code });
   return res.status(err.statusCode).json({
     error: err.code,
     message: err.message
@@ -38,7 +39,7 @@ exports.getProfile = async (req, res) => {
       createdAt: user.createdAt
     };
 
-    logSuccess(context, `Lấy profile thành công: ${user.phone}`);
+    logSuccess(context, 'Lấy profile thành công', { userId: user._id });
     return res.json({ ok: true, user: profile });
 
   } catch (err) {
@@ -73,7 +74,10 @@ exports.updateProfile = async (req, res) => {
       return res.status(404).json({ error: 'user_not_found', message: 'User not found' });
     }
 
-    logSuccess(context, `Cập nhật profile thành công: ${user.phone}`, { updatedFields: Object.keys(validation.data) });
+    logSuccess(context, 'Cập nhật profile thành công', {
+      userId: user._id,
+      updatedFields: Object.keys(validation.data)
+    });
     logUserAction(user._id, 'Cập nhật profile', { fields: Object.keys(validation.data) });
 
     return res.json({ ok: true, message: 'Profile updated successfully' });
@@ -86,8 +90,6 @@ exports.updateProfile = async (req, res) => {
 
 exports.updateAvatar = async (req, res) => {
   const context = 'userController.updateAvatar';
-
-  console.log('req.file:', req.file);
 
   const tempPath = req.file?.path;
 
@@ -103,14 +105,14 @@ exports.updateAvatar = async (req, res) => {
 
     // ⏳ Log: Bắt đầu upload avatar
     logAvatarUpload('pending', {
-      phone: user.phone,
+      userId: user._id.toString(),
       fileName: req.file.originalname,
       fileSize: req.file.size
     });
 
     // 🔄 Log: Đang xử lý
     logAvatarUpload('processing', {
-      phone: user.phone
+      userId: user._id.toString()
     });
 
     // Upload new avatar to Cloudinary
@@ -128,10 +130,10 @@ exports.updateAvatar = async (req, res) => {
 
     // ✅ Log: Upload avatar thành công
     logAvatarUpload('completed', {
-      phone: user.phone,
-      cloudinary_id: cloudinary_id,
-      url: url,
-      oldCloudinaryId: oldCloudinaryId
+      userId: user._id.toString(),
+      cloudinary_id,
+      url,
+      oldCloudinaryId
     });
 
     logUserAction(user._id, 'Cập nhật avatar', { new_id: cloudinary_id });
@@ -145,7 +147,7 @@ exports.updateAvatar = async (req, res) => {
   } catch (err) {
     // ❌ Log: Upload avatar lỗi
     logAvatarUpload('failed', {
-      phone: req.user?.phone,
+      userId: req.user?.id ? req.user.id.toString() : null,
       fileName: req.file?.originalname,
       error: err.message
     });
@@ -171,14 +173,14 @@ exports.requestDeleteAccount = async (req, res) => {
     }
     phone = user.phone;
 
-    logWarning(context, `⚠️ Yêu cầu XÓA TÀI KHOẢN từ: ${phone}`);
+    logWarning(context, '⚠️ Yêu cầu XÓA TÀI KHOẢN', { userId: user._id });
     const result = await otpService.requestOtp(phone, 'delete_account', req.ip);
 
     return res.json(result);
 
   } catch (err) {
     if (err instanceof OtpServiceError) {
-      return handleOtpError(res, err, context, phone);
+      return handleOtpError(res, err, context);
     }
     logError(context, 'Lỗi không xác định khi gửi OTP xóa tài khoản', err);
     return res.status(500).json({ error: 'server_error', message: 'Failed to request account deletion' });
@@ -200,38 +202,37 @@ exports.confirmDeleteAccount = async (req, res) => {
       return res.status(404).json({ error: 'user_not_found', message: 'User not found' });
     }
 
-    logWarning(context, `⚠️ ĐỌC XÁC NHẬN XÓA TÀI KHOẢN từ: ${user.phone}`);
+    if (!user.isActive) {
+      return res.status(400).json({ error: 'account_already_deactivated', message: 'Account is already deactivated.' });
+    }
+
+    logWarning(context, '⚠️ XÁC NHẬN VÔ HIỆU HÓA TÀI KHOẢN', { userId: user._id });
 
     const isVerified = await otpService.verifyOtp(user.phone, otp, 'delete_account');
 
     if (isVerified) {
       const userId = user._id;
       const userPhone = user.phone;
-      const avatarCloudinaryId = user.avatar?.cloudinary_id;
 
-      // Delete avatar from cloudinary before deleting user
-      if (avatarCloudinaryId) {
-        await deleteResource(avatarCloudinaryId, 'image');
-      }
+      user.isActive = false;
+      user.deactivatedAt = new Date();
+      await user.save();
 
-      await User.findByIdAndDelete(userId);
-
-      const OtpLog = require('../models/OtpLog');
       await OtpLog.deleteMany({ phone: userPhone });
 
-      logWarning(context, `🗑️ XÓA VĨNH VIỄN TÀI KHOẢN: ${userPhone} | User ID: ${userId}`);
-      logUserAction(userId, 'XÓA TÀI KHOẢN VĨNH VIỄN', { phone: userPhone });
+      logWarning(context, '🔒 VÔ HIỆU HÓA TÀI KHOẢN', { userId });
+      logUserAction(userId, 'VÔ HIỆU HÓA TÀI KHOẢN');
 
-      return res.json({ ok: true, message: 'Account deleted successfully' });
+      return res.json({ ok: true, message: 'Account deactivated successfully' });
     }
 
     return res.status(400).json({ error: 'invalid_otp', message: 'Invalid OTP code.' });
 
   } catch (err) {
     if (err instanceof OtpServiceError) {
-      return handleOtpError(res, err, context, user?.phone);
+      return handleOtpError(res, err, context);
     }
-    logError(context, 'Lỗi không xác định khi xác thực OTP xóa tài khoản', err);
-    return res.status(500).json({ error: 'server_error', message: 'Failed to delete account' });
+    logError(context, 'Lỗi không xác định khi xác thực OTP vô hiệu hóa tài khoản', err);
+    return res.status(500).json({ error: 'server_error', message: 'Failed to deactivate account' });
   }
 };

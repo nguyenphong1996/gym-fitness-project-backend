@@ -3,6 +3,14 @@ const mongoose = require('mongoose');
 const User = require('../models/User');
 const { logDebug, logSuccess, logError, logWarning } = require('../utils/logger');
 
+const redactPhone = (phone) => {
+  if (!phone) return null;
+  const digits = phone.toString().replace(/\D/g, '');
+  if (digits.length <= 4) return '****';
+  const lastFour = digits.slice(-4);
+  return `****${lastFour}`;
+};
+
 /**
  * Build query filters for admin user listing.
  */
@@ -16,6 +24,9 @@ function buildUserFilters({ search, isVerified }) {
   }
 
   if (search) {
+    if (search.length > 100) {
+      throw new Error('Search query too long');
+    }
     const regex = new RegExp(search.trim(), 'i');
     filters.$or = [
       { phone: regex },
@@ -74,7 +85,9 @@ exports.getUserList = async (req, res) => {
 
     logDebug(context, 'Admin yêu cầu danh sách customer', {
       adminId: req.user?._id || req.user?.id,
-      filters,
+      hasSearch: !!req.query.search,
+      searchLength: req.query.search ? req.query.search.length : 0,
+      isVerifiedFilter: req.query.isVerified === 'true' ? true : req.query.isVerified === 'false' ? false : null,
       page,
       limit
     });
@@ -110,8 +123,7 @@ exports.getUserList = async (req, res) => {
     logError(context, 'Lỗi khi lấy danh sách user', error);
     return res.status(500).json({
       success: false,
-      message: 'Failed to get user list',
-      error: error.message
+      message: 'Failed to get user list'
     });
   }
 };
@@ -158,7 +170,10 @@ exports.getUserDetail = async (req, res) => {
       });
     }
 
-    logSuccess(context, `Lấy thông tin customer thành công: ${user.phone}`, { userId });
+    logSuccess(context, 'Lấy thông tin customer thành công', {
+      userId,
+      phone: redactPhone(user.phone)
+    });
 
     return res.json({
       success: true,
@@ -168,8 +183,7 @@ exports.getUserDetail = async (req, res) => {
     logError(context, 'Lỗi khi lấy chi tiết user', error);
     return res.status(500).json({
       success: false,
-      message: 'Failed to get user detail',
-      error: error.message
+      message: 'Failed to get user detail'
     });
   }
 };

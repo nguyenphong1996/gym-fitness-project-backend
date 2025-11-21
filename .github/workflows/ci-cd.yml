@@ -52,7 +52,8 @@ jobs:
       continue-on-error: true
 
     - name: Check for security vulnerabilities
-      run: npm audit --audit-level=moderate || true
+      run: npm audit --audit-level=moderate
+      continue-on-error: false
 
   build:
     name: Build Application
@@ -77,7 +78,16 @@ jobs:
       continue-on-error: true
 
     - name: Start application in background
-      run: npm start &
+      run: |
+        npm start > app.log 2>&1 &
+        APP_PID=$!
+        echo "$APP_PID" > app.pid
+        sleep 2
+        if ! kill -0 "$APP_PID" 2>/dev/null; then
+          echo "❌ Application failed to start"
+          cat app.log
+          exit 1
+        fi
       env:
         MONGO_URI: ${{ secrets.MONGO_URI }}
         JWT_SECRET: ${{ secrets.JWT_SECRET }}
@@ -95,12 +105,17 @@ jobs:
             echo "✅ Server started successfully on port 3000"
             sleep 2
             curl -s http://localhost:3000/health && echo "" || echo "Health check failed"
-            lsof -ti:3000 | xargs kill -9 2>/dev/null || true
+            if [ -f app.pid ]; then
+              kill -9 "$(cat app.pid)" 2>/dev/null || true
+            fi
+            rm -f app.pid
             exit 0
           fi
           sleep 1
         done
         echo "❌ Server failed to start after 15 seconds"
+        echo "----- Application logs -----"
+        [ -f app.log ] && cat app.log
         exit 1
 
   code-quality:
@@ -115,16 +130,40 @@ jobs:
       uses: actions/setup-node@v4
       with:
         node-version: '20.x'
+        cache: 'npm'
 
-    - name: Check code formatting
-      run: |
-        echo "✅ Code quality check passed"
-        
+    - name: Install dependencies
+      run: npm ci
+
+    - name: Run lint (fallback to tests)
+      run: npm run lint || npm test
     - name: Check for TODO comments
       run: |
         if grep -r "TODO\|FIXME" src/ --exclude-dir=node_modules || true; then
           echo "⚠️ Found TODO/FIXME comments"
         fi
+
+  code-review:
+    name: CodeRabbit Review
+    runs-on: ubuntu-22.04
+    needs: test
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+    permissions:
+      contents: read
+      pull-requests: write
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Run CodeRabbit review
+      uses: coderabbitai/ai-pr-reviewer@latest
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        CODERABBIT_API_KEY: ${{ secrets.CODERABBIT_API_KEY }}
+      with:
+        review_simple_changes: false
+        review_comment_lgtm: false
 
   docker:
     name: Build & Push Docker Image
@@ -149,23 +188,20 @@ jobs:
         username: ${{ secrets.DOCKERHUB_USERNAME }}
         password: ${{ secrets.DOCKERHUB_PASSWORD }}
 
-    - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v3
-
     - name: Build and push Docker image to Docker Hub
       uses: docker/build-push-action@v5
       with:
         context: .
         push: true
         tags: |
-          ${{ secrets.DOCKERHUB_USERNAME }}/gymxfit:be
-          ${{ secrets.DOCKERHUB_USERNAME }}/gymxfit:be-${{ github.sha }}
+          ${{ secrets.DOCKERHUB_USERNAME }}/gymxfit:latest
+          ${{ secrets.DOCKERHUB_USERNAME }}/gymxfit:${{ github.sha }}
         cache-from: type=gha
         cache-to: type=gha,mode=max
 
     - name: Image pushed
       run: |
-        echo "Image pushed: ${{ secrets.DOCKERHUB_USERNAME }}/gymxfit:be and ${{ secrets.DOCKERHUB_USERNAME }}/gymxfit:be-${{ github.sha }}"
+        echo "Image pushed: ${{ secrets.DOCKERHUB_USERNAME }}/gymxfit:latest and ${{ secrets.DOCKERHUB_USERNAME }}/gymxfit:${{ github.sha }}"
 
   deploy:
     name: Deploy to Server

@@ -2,7 +2,7 @@
 
 const fs = require('fs').promises;
 const User = require('../models/User');
-const { validateCreateStaffRequest } = require('../utils/validation');
+const { validateCreateStaffRequest, validateSkills } = require('../utils/validation');
 const { uploadImage, deleteResource } = require('../utils/cloudinary');
 const { logError, logSuccess, logWarning, logDebug, logAuth, logUserAction, logAvatarUpload } = require('../utils/logger');
 
@@ -309,11 +309,7 @@ exports.approveStaffSkills = async (req, res) => {
 
     logDebug(context, `Xác nhận skills PT: ${staffId}`, { admin: req.user._id });
 
-    const staff = await User.findByIdAndUpdate(
-      staffId,
-      { skillsApprovedByAdmin: true },
-      { new: true }
-    );
+    const staff = await User.findById(staffId);
 
     if (!staff || staff.role !== 'staff') {
       logWarning(context, `PT không tồn tại: ${staffId}`);
@@ -322,6 +318,46 @@ exports.approveStaffSkills = async (req, res) => {
         message: 'PT not found'
       });
     }
+
+    let updatedSkills = null;
+    const pendingRequest = staff.skillUpdateRequest && staff.skillUpdateRequest.status === 'pending'
+      ? staff.skillUpdateRequest
+      : null;
+
+    if (pendingRequest) {
+      updatedSkills = pendingRequest.skills;
+    } else if (req.body?.skills) {
+      const skillValidation = validateSkills(req.body.skills, { required: true });
+      if (!skillValidation.valid) {
+        return res.status(400).json({
+          success: false,
+          error: skillValidation.error,
+          message: skillValidation.message
+        });
+      }
+      updatedSkills = skillValidation.skills;
+    }
+
+    if (!updatedSkills || updatedSkills.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'no_skill_request',
+        message: 'No pending skill request found. Provide skills in payload to approve directly.'
+      });
+    }
+
+    staff.skills = updatedSkills;
+    staff.skillsApprovedByAdmin = true;
+    staff.skillUpdateRequest = {
+      skills: updatedSkills,
+      status: 'approved',
+      requestedAt: pendingRequest?.requestedAt || new Date(),
+      reviewedAt: new Date(),
+      reviewedBy: req.user._id,
+      adminNote: req.body?.adminNote || null
+    };
+
+    await staff.save();
 
     logSuccess(context, `Xác nhận skills PT thành công: ${staff.phone}`, {
       skills: staff.skills
@@ -334,7 +370,8 @@ exports.approveStaffSkills = async (req, res) => {
         id: staff._id,
         phone: staff.phone,
         skills: staff.skills,
-        skillsApprovedByAdmin: staff.skillsApprovedByAdmin
+        skillsApprovedByAdmin: staff.skillsApprovedByAdmin,
+        skillUpdateRequest: staff.skillUpdateRequest
       }
     });
 
@@ -343,6 +380,62 @@ exports.approveStaffSkills = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: 'Failed to approve PT skills',
+      error: error.message
+    });
+  }
+};
+
+/**
+ * Reject pending PT skill request
+ * PATCH /api/admin/staff/:staffId/skills/reject
+ */
+exports.rejectStaffSkills = async (req, res) => {
+  const context = 'staffController.rejectStaffSkills';
+  try {
+    const { staffId } = req.params;
+    logDebug(context, `Từ chối skills PT: ${staffId}`, { admin: req.user._id });
+
+    const staff = await User.findById(staffId);
+    if (!staff || staff.role !== 'staff') {
+      logWarning(context, `PT không tồn tại: ${staffId}`);
+      return res.status(404).json({
+        success: false,
+        message: 'PT not found'
+      });
+    }
+
+    if (!staff.skillUpdateRequest || staff.skillUpdateRequest.status !== 'pending') {
+      return res.status(400).json({
+        success: false,
+        error: 'no_pending_request',
+        message: 'No pending skill update request to reject'
+      });
+    }
+
+    staff.skillUpdateRequest.status = 'rejected';
+    staff.skillUpdateRequest.reviewedAt = new Date();
+    staff.skillUpdateRequest.reviewedBy = req.user._id;
+    staff.skillUpdateRequest.adminNote = req.body?.note || req.body?.adminNote || null;
+
+    await staff.save();
+
+    logSuccess(context, `Đã từ chối skill request của PT: ${staff.phone}`);
+
+    return res.json({
+      success: true,
+      message: 'Skill update request rejected',
+      staff: {
+        id: staff._id,
+        phone: staff.phone,
+        skillUpdateRequest: staff.skillUpdateRequest
+      }
+    });
+
+  } catch (error) {
+    logError(context, 'Lỗi khi từ chối skill request PT', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to reject PT skill request',
       error: error.message
     });
   }
@@ -478,5 +571,6 @@ module.exports = {
   activateStaff: exports.activateStaff,
   deactivateStaff: exports.deactivateStaff,
   approveStaffSkills: exports.approveStaffSkills,
+  rejectStaffSkills: exports.rejectStaffSkills,
   updateStaffAvatar: exports.updateStaffAvatar
 };

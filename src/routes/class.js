@@ -150,7 +150,7 @@ const {
  *                     status:
  *                       type: string
  *                       example: "draft"
- *                       enum: ["draft", "scheduled", "ongoing", "completed", "cancelled"]
+ *                       enum: ["draft", "scheduled", "waiting_pt", "on_going_waiting_customers", "on_going", "waiting_checkout", "completed", "expired", "overdue", "cancelled"]
  *                     description:
  *                       type: string
  *                       example: "Tập luyện toàn bộ cơ thể trên"
@@ -270,7 +270,7 @@ router.post('/create', authMiddleware, adminMiddleware, createClass);
  *
  *       📊 **Hỗ trợ:**
  *       - Phân trang: page, limit
- *       - Lọc: status (draft, scheduled, ongoing, completed, cancelled), category, staffId
+ *       - Lọc: status (draft, scheduled, waiting_pt, on_going_waiting_customers, on_going, waiting_checkout, completed, expired, overdue, cancelled), category, staffId
  *       - Sắp xếp: Mới nhất trước (createdAt desc)
  *     parameters:
  *       - in: query
@@ -294,7 +294,7 @@ router.post('/create', authMiddleware, adminMiddleware, createClass);
  *         name: status
  *         schema:
  *           type: string
- *           enum: [draft, scheduled, ongoing, completed, cancelled]
+ *           enum: [draft, scheduled, waiting_pt, on_going_waiting_customers, on_going, waiting_checkout, completed, expired, overdue, cancelled]
  *         description: Lọc theo trạng thái
  *         example: "scheduled"
  *       - in: query
@@ -477,7 +477,7 @@ router.get('/', authMiddleware, adminMiddleware, getClassList);
  *                     status:
  *                       type: string
  *                       example: "scheduled"
- *                       enum: ["draft", "scheduled", "ongoing", "completed", "cancelled"]
+ *                       enum: ["draft", "scheduled", "waiting_pt", "on_going_waiting_customers", "on_going", "waiting_checkout", "completed", "expired", "overdue", "cancelled"]
  *                     location:
  *                       type: string
  *                       example: "Phòng 101"
@@ -566,7 +566,7 @@ router.get('/:classId', authMiddleware, adminMiddleware, getClassDetail);
  *     security:
  *       - bearerAuth: []
  *     description: |
- *       Admin cập nhật thông tin chi tiết của lớp học (name, category, capacity, lịch học, vị trí, mô tả).
+ *       Admin cập nhật thông tin chi tiết của lớp học (name, category, capacity, lịch học, vị trí, mô tả, PT phụ trách).
  *
  *       ✅ **Quy tắc cập nhật:**
  *       - Chỉ cập nhật các trường được gửi (optional)
@@ -574,7 +574,8 @@ router.get('/:classId', authMiddleware, adminMiddleware, getClassDetail);
  *       - capacity: 1-100
  *       - category: workout, cardio, stretching, nutrition, yoga, other
  *       - startTime/endTime: ISO 8601, duration ≥ 15 minutes
- *       - Không được cập nhật staffId, status qua endpoint này
+ *       - staffId: phải là PT active, đã được admin approve skills và có skill khớp category lớp (ưu tiên category mới nếu được cập nhật)
+ *       - Không được cập nhật status qua endpoint này
  *     parameters:
  *       - in: path
  *         name: classId
@@ -623,6 +624,11 @@ router.get('/:classId', authMiddleware, adminMiddleware, getClassDetail);
  *               location:
  *                 type: string
  *                 example: "Phòng 101"
+ *               staffId:
+ *                 type: string
+ *                 pattern: '^[0-9a-f]{24}$'
+ *                 description: ID PT giảng dạy mới (phải active, approved và có skill phù hợp category)
+ *                 example: "507f1f77bcf86cd799439011"
  *     responses:
  *       200:
  *         description: Cập nhật lớp học thành công
@@ -637,7 +643,7 @@ router.get('/:classId', authMiddleware, adminMiddleware, getClassDetail);
  *                 message:
  *                   type: string
  *                   example: "Class updated successfully"
- *                 class:
+ *                 data:
  *                   type: object
  *                   properties:
  *                     id:
@@ -851,8 +857,8 @@ router.patch('/:classId/open', authMiddleware, adminMiddleware, openClass);
  *       Admin đóng lớp học và xác định lý do: hoàn thành (completed) hoặc hủy (cancelled).
  *
  *       ✅ **Điều kiện:**
- *       - Lớp phải ở trạng thái 'scheduled' hoặc 'ongoing'
- *       - Không thể đóng lớp đã là completed/cancelled
+ *       - Lớp phải chưa nằm trong các trạng thái cuối: completed, cancelled, expired, overdue
+ *       - Khi chọn completed, PT và toàn bộ học viên phải đã check-out (tối thiểu 1 học viên tham gia) và thời gian kết thúc phải cách ít nhất 15 phút
  *
  *       📊 **Trạng thái lớp sau khi đóng:**
  *       - completed: Lớp kết thúc bình thường
@@ -1086,7 +1092,7 @@ router.delete('/:classId', authMiddleware, adminMiddleware, deleteClass);
  *       Tạo mới hoặc làm mới mã QR code cho lớp học, dùng để điểm danh check-in/out.
  *
  *       🔐 **Quy tắc:**
- *       - Chỉ tạo được khi lớp đang ở trạng thái `scheduled` hoặc `ongoing`.
+ *       - Chỉ tạo hoặc làm mới khi lớp đang ở trạng thái `scheduled` hoặc `waiting_pt` và chưa có điểm danh check-in.
  *       - QR code cũ (nếu có) sẽ bị thay thế và xóa khỏi Cloudinary.
  *       - Payload bên trong QR code chứa `classId`, `token` ngẫu nhiên và dấu thời gian tạo.
  *     parameters:
@@ -1151,7 +1157,7 @@ router.delete('/:classId', authMiddleware, adminMiddleware, deleteClass);
  *                   example: "invalid_class_status"
  *                 message:
  *                   type: string
- *                   example: "QR code can only be generated for classes that are scheduled or ongoing"
+ *                   example: "QR code can only be generated for classes that are scheduled or waiting for PT check-in"
  *       401:
  *         description: Unauthorized - Token không hợp lệ hoặc hết hạn
  *         content:

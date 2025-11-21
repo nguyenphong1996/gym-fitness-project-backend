@@ -951,6 +951,21 @@ exports.validateUpdateClassRequest = (data) => {
     }
   }
   
+  // STAFF ID - OPTIONAL (required format if provided)
+  if (data.staffId !== undefined && data.staffId !== null) {
+    const staffIdInput = data.staffId != null ? data.staffId.toString().trim() : '';
+    const staffIdValidation = exports.validateObjectId(staffIdInput, { required: true, fieldName: 'Staff ID' });
+    if (!staffIdValidation.valid) {
+      errors.push({
+        field: 'staffId',
+        error: staffIdValidation.error,
+        message: staffIdValidation.message
+      });
+    } else if (staffIdValidation.id) {
+      validated.staffId = staffIdValidation.id;
+    }
+  }
+  
   // SUBCATEGORY - OPTIONAL
   if (data.subcategory !== undefined && data.subcategory !== null) {
     const categoryForSub = data.category || (data.category !== null ? null : undefined);

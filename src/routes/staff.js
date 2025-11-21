@@ -4,6 +4,7 @@ const express = require('express');
 const router = express.Router();
 const multer = require('multer');
 const path = require('path');
+const os = require('os');
 const fs = require('fs');
 const authMiddleware = require('../middlewares/authMiddleware');
 const adminMiddleware = require('../middlewares/adminMiddleware');
@@ -14,11 +15,12 @@ const {
   activateStaff,
   deactivateStaff,
   approveStaffSkills,
+  rejectStaffSkills,
   updateStaffAvatar
 } = require('../controllers/staffController');
 
 // --- Multer configuration for staff avatar uploads ---
-const uploadDir = path.join('/tmp', 'gymxfit-avatars');
+const uploadDir = process.env.UPLOAD_AVATAR_DIR || path.join(os.tmpdir(), 'gymxfit-avatars');
 if (!fs.existsSync(uploadDir)) {
   fs.mkdirSync(uploadDir, { recursive: true });
 }
@@ -35,11 +37,11 @@ const storage = multer.diskStorage({
 const upload = multer({
   storage,
   fileFilter: (req, file, cb) => {
-    const allowedMimes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/jpg'];
+    const allowedMimes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
     if (allowedMimes.includes(file.mimetype)) {
       cb(null, true);
     } else {
-      cb(new Error('Invalid file type. Only JPG, PNG, GIF, WEBP files are allowed.'), false);
+      cb(new Error('Invalid file type. Only JPEG, PNG, GIF, WEBP files are allowed.'), false);
     }
   },
   limits: { fileSize: 5 * 1024 * 1024 } // 5 MB limit
@@ -528,7 +530,7 @@ router.get('/:staffId', authMiddleware, adminMiddleware, getStaffDetail);
  *     description: |
  *       Cho phép admin cập nhật avatar cho PT hoặc PT tự upload avatar của chính mình.
  *       - File ảnh phải gửi dưới dạng `multipart/form-data` với field `avatar`.
- *       - Định dạng hỗ trợ: JPG, PNG, GIF, WEBP. Kích thước tối đa 5MB.
+ *       - Định dạng hỗ trợ: JPEG, PNG, GIF, WEBP. Kích thước tối đa 5MB.
  *       - Avatar cũ (nếu có) sẽ bị xóa khỏi Cloudinary sau khi upload thành công.
  *       - PT có thể sử dụng endpoint này nếu cung cấp đúng `staffId` của chính mình.
  *     parameters:
@@ -550,7 +552,7 @@ router.get('/:staffId', authMiddleware, adminMiddleware, getStaffDetail);
  *               avatar:
  *                 type: string
  *                 format: binary
- *                 description: "File ảnh đại diện (JPG, PNG, GIF, WEBP - tối đa 5MB)"
+ *                 description: "File ảnh đại diện (JPEG, PNG, GIF, WEBP - tối đa 5MB)"
  *     responses:
  *       200:
  *         description: Cập nhật avatar thành công
@@ -848,14 +850,14 @@ router.patch('/:staffId/deactivate', authMiddleware, adminMiddleware, deactivate
  * @swagger
  * /api/admin/staff/{staffId}/skills/approve:
  *   patch:
- *     summary: Xác nhận skills của PT (Admin only)
+ *     summary: Duyệt kỹ năng PT
  *     operationId: approveStaffSkills
  *     tags: [Staff (PT)]
  *     security:
  *       - bearerAuth: []
  *     description: |
- *       Admin xác nhận skills của PT. 
- *       Sau khi xác nhận, PT có thể được gán vào lớp học có skill tương ứng
+ *       - Nếu PT đã gửi yêu cầu cập nhật kỹ năng (pending) thì admin chỉ cần gọi endpoint này để duyệt.
+ *       - Nếu chưa có yêu cầu pending, admin có thể truyền `skills` trực tiếp trong payload để cập nhật và duyệt ngay.
  *     parameters:
  *       - in: path
  *         name: staffId
@@ -863,9 +865,26 @@ router.patch('/:staffId/deactivate', authMiddleware, adminMiddleware, deactivate
  *         schema:
  *           type: string
  *           pattern: '^[0-9a-f]{24}$'
+ *     requestBody:
+ *       required: false
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               skills:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *                   enum: [workout, cardio, stretching, nutrition, yoga, other]
+ *                 description: |
+ *                   Chỉ bắt buộc khi không có yêu cầu pending từ PT.
+ *               adminNote:
+ *                 type: string
+ *                 example: "Đã xác nhận thêm kỹ năng Yoga"
  *     responses:
  *       200:
- *         description: Xác nhận skills PT thành công
+ *         description: Duyệt kỹ năng thành công
  *         content:
  *           application/json:
  *             schema:
@@ -873,77 +892,76 @@ router.patch('/:staffId/deactivate', authMiddleware, adminMiddleware, deactivate
  *               properties:
  *                 success:
  *                   type: boolean
- *                   example: true
  *                 message:
  *                   type: string
- *                   example: "PT skills approved"
  *                 staff:
  *                   type: object
  *                   properties:
  *                     id:
  *                       type: string
- *                       example: "58f5c0eb2a6d0c1a8f9b4c2e"
  *                     phone:
  *                       type: string
- *                       example: "0912345678"
  *                     skills:
  *                       type: array
  *                       items:
  *                         type: string
- *                       example: ["yoga", "stretching"]
  *                     skillsApprovedByAdmin:
  *                       type: boolean
- *                       example: true
- *                       description: Skills đã được admin approve
- *       404:
- *         description: PT not found - Không tìm thấy PT
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                   example: false
- *                 message:
- *                   type: string
- *                   example: "PT not found"
+ *                     skillUpdateRequest:
+ *                       type: object
+ *       400:
+ *         description: Không có yêu cầu pending và payload không chứa skills hợp lệ
  *       401:
- *         description: Unauthorized - Token không hợp lệ hoặc hết hạn
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 message:
- *                   type: string
- *                   example: "Unauthorized"
+ *         description: Token không hợp lệ
  *       403:
- *         description: Forbidden - Chỉ admin mới được truy cập
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 message:
- *                   type: string
- *                   example: "Forbidden - Admin access required"
+ *         description: Không phải admin
+ *       404:
+ *         description: Không tìm thấy PT
  *       500:
- *         description: Server error - Lỗi hệ thống
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                   example: false
- *                 message:
- *                   type: string
- *                   example: "Failed to approve PT skills"
- *                 error:
- *                   type: string
+ *         description: Lỗi hệ thống
  */
 router.patch('/:staffId/skills/approve', authMiddleware, adminMiddleware, approveStaffSkills);
+
+/**
+ * @swagger
+ * /api/admin/staff/{staffId}/skills/reject:
+ *   patch:
+ *     summary: Từ chối yêu cầu cập nhật kỹ năng của PT
+ *     operationId: rejectStaffSkills
+ *     tags: [Staff (PT)]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: staffId
+ *         required: true
+ *         schema:
+ *           type: string
+ *           pattern: '^[0-9a-f]{24}$'
+ *     requestBody:
+ *       required: false
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               note:
+ *                 type: string
+ *                 example: "Thiếu chứng chỉ bổ sung"
+ *     responses:
+ *       200:
+ *         description: Từ chối thành công
+ *       400:
+ *         description: Không có yêu cầu pending để từ chối
+ *       401:
+ *         description: Token không hợp lệ
+ *       403:
+ *         description: Không phải admin
+ *       404:
+ *         description: Không tìm thấy PT
+ *       500:
+ *         description: Lỗi hệ thống
+ */
+router.patch('/:staffId/skills/reject', authMiddleware, adminMiddleware, rejectStaffSkills);
 
 module.exports = router;

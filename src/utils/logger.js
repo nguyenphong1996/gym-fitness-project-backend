@@ -347,3 +347,20 @@ exports.logAvatarUpload = (status, data = {}) => {
   
   console.log(''); // Empty line
 };
+
+/**
+ * Backwards compatibility aliases so logger.error/info style calls still work
+ * when modules import the whole logger object instead of destructuring helpers.
+ */
+const loggerAliases = {
+  error: 'logError',
+  info: 'logInfo',
+  warn: 'logWarning',
+  warning: 'logWarning',
+  success: 'logSuccess',
+  debug: 'logDebug'
+};
+
+Object.entries(loggerAliases).forEach(([alias, original]) => {
+  exports[alias] = exports[original];
+});

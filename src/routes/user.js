@@ -3,12 +3,13 @@ const express = require('express');
 const router = express.Router();
 const multer = require('multer');
 const path = require('path');
+const os = require('os');
 const fs = require('fs');
 const userController = require('../controllers/userController');
 const authMiddleware = require('../middlewares/authMiddleware');
 
 // --- Multer Configuration for Avatar Upload ---
-const uploadDir = path.join('/tmp', 'gymxfit-avatars');
+const uploadDir = process.env.UPLOAD_AVATAR_DIR || path.join(os.tmpdir(), 'gymxfit-avatars');
 if (!fs.existsSync(uploadDir)) {
   fs.mkdirSync(uploadDir, { recursive: true });
 }
@@ -24,11 +25,11 @@ const storage = multer.diskStorage({
 const upload = multer({
   storage: storage,
   fileFilter: (req, file, cb) => {
-    const allowedMimes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/jpg'];
+    const allowedMimes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
     if (allowedMimes.includes(file.mimetype)) {
       cb(null, true);
     } else {
-      cb(new Error('Invalid file type. Only JPG, PNG, GIF, WEBP files are allowed.'), false);
+      cb(new Error('Invalid file type. Only JPEG, PNG, GIF, WEBP files are allowed.'), false);
     }
   },
   limits: { fileSize: 5 * 1024 * 1024 } // 5 MB limit
@@ -166,7 +167,7 @@ router.get('/profile', authMiddleware, userController.getProfile);
  *               gender: { type: string, enum: [male, female, other] }
  *               dob: { type: string, format: date }
  *               weight: { type: number, minimum: 0, maximum: 300 }
- *               height: { type: number, minimum: 0, maximum: 200 }
+ *               height: { type: number, minimum: 0, maximum: 250 }
  *     responses:
  *       200:
  *         description: Cập nhật thành công
@@ -219,7 +220,7 @@ router.put('/profile', authMiddleware, userController.updateProfile);
  *               avatar:
  *                 type: string
  *                 format: binary
- *                 description: "File ảnh (JPG, PNG, GIF, WEBP), tối đa 5MB."
+ *                 description: "File ảnh (JPEG, PNG, GIF, WEBP), tối đa 5MB."
  *     responses:
  *       200:
  *         description: Upload avatar thành công
@@ -275,11 +276,9 @@ router.put('/avatar', authMiddleware, upload.single('avatar'), userController.up
  * @swagger
  * /api/user/account/delete/request:
  *   post:
- *     summary: Yêu cầu xóa tài khoản - Gửi OTP xác nhận
+ *     summary: Yêu cầu vô hiệu hóa tài khoản - Gửi OTP xác nhận
  *     description: |
- *       **⚠️ CẢNH BÁO: TÍNH NĂNG NGUY HIỂM**
- *       
- *       Bước 1 của quy trình xóa tài khoản. API sẽ gửi mã OTP đến số điện thoại để xác nhận.
+ *       Bước 1 của quy trình vô hiệu hóa tài khoản. API sẽ gửi mã OTP đến số điện thoại để xác nhận.
  *     tags: [User]
  *     security:
  *       - bearerAuth: []
@@ -323,11 +322,11 @@ router.post('/account/delete/request', authMiddleware, userController.requestDel
  * @swagger
  * /api/user/account/delete/confirm:
  *   delete:
- *     summary: Xác nhận xóa tài khoản - PERMANENT DELETE
+ *     summary: Xác nhận vô hiệu hóa tài khoản
  *     description: |
- *       **⚠️ CẢNH BÁO: HÀNH ĐỘNG KHÔNG THỂ HOÀN TÁC ⚠️**
+ *       **⚠️ CẢNH BÁO: TÀI KHOẢN SẼ BỊ VÔ HIỆU HÓA ⚠️**
  *       
- *       Bước 2 của quy trình xóa tài khoản. Xác thực OTP để xóa vĩnh viễn tài khoản.
+ *       Bước 2 của quy trình vô hiệu hóa tài khoản. Xác thực OTP để khóa tài khoản khách hàng.
  *     tags: [User]
  *     security:
  *       - bearerAuth: []
@@ -342,14 +341,14 @@ router.post('/account/delete/request', authMiddleware, userController.requestDel
  *               code: { type: string, example: "1234", description: "Mã OTP 4 chữ số" }
  *     responses:
  *       200:
- *         description: Tài khoản đã bị xóa thành công
+ *         description: Tài khoản đã bị vô hiệu hóa thành công
  *         content:
  *           application/json:
  *             schema:
  *               type: object
  *               properties:
  *                 ok: { type: boolean, example: true }
- *                 message: { type: string, example: "Account deleted successfully" }
+ *                 message: { type: string, example: "Account deactivated successfully" }
  *       400:
  *         description: Validation error hoặc OTP không hợp lệ
  *         content:
@@ -359,7 +358,7 @@ router.post('/account/delete/request', authMiddleware, userController.requestDel
  *               properties:
  *                 error:
  *                   type: string
- *                   enum: [missing_otp, invalid_otp_format, no_otp_request, otp_expired, invalid_otp]
+ *                   enum: [missing_otp, invalid_otp_format, no_otp_request, otp_expired, invalid_otp, account_already_deactivated]
  *                 message:
  *                   type: string
  *       401:
