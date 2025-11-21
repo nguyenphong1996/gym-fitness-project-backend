@@ -6,8 +6,10 @@ WORKDIR /app
 # Copy package files
 COPY package*.json ./
 
-# Install dependencies
-RUN npm ci --omit=dev
+# Allow optionally installing devDependencies (useful for test builds in CI)
+ARG INSTALL_DEV=false
+# If INSTALL_DEV=true then install devDependencies, otherwise omit them for smaller production image
+RUN if [ "$INSTALL_DEV" = "true" ]; then npm ci --include=dev; else npm ci --omit=dev; fi
 
 # Production stage
 FROM node:20-alpine
