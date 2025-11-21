@@ -163,13 +163,12 @@ const uploadVideo = async (filePath, options = {}) => {
     const result = await withRetry('video upload', (attempt) => new Promise((resolve, reject) => {
       logInfo('cloudinary', `Uploading video (attempt ${attempt}): ${filePath}`);
 
-      const uploadStream = cloudinary.uploader.upload_large_stream(
+      const uploadStream = cloudinary.uploader.upload_stream(
         {
           resource_type,
           folder,
           overwrite,
           public_id,
-          chunk_size,
           use_filename,
           unique_filename,
           // Avoid eager HLS transformations by default to save credits.
