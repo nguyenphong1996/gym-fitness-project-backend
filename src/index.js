@@ -13,6 +13,7 @@ const enrollmentRoutes = require('./routes/enrollment');
 const customerVideoRoutes = require('./routes/customerVideoFavorites');
 const videoRoutes = require('./routes/video');
 const staffClassAttendanceRoutes = require('./routes/staffClassAttendance');
+const paymentRoutes = require('./routes/payment'); // Import payment routes
 
 // Swagger documentation
 const swaggerUi = require('swagger-ui-express');
@@ -31,6 +32,7 @@ apiRouter.use('/staff/classes', staffClassAttendanceRoutes);
 apiRouter.use('/customer/videos', customerVideoRoutes);
 apiRouter.use('/customer', enrollmentRoutes);
 apiRouter.use('/videos', videoRoutes);
+apiRouter.use('/payment', paymentRoutes); // Register payment routes
 
 // Health check
 apiRouter.get('/health', (req, res) => {
