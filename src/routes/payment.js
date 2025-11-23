@@ -155,4 +155,56 @@ router.get('/vnpay-return', paymentController.vnpayReturn);
  */
 router.get('/vnpay-ipn', paymentController.vnpayIpn);
 
+/**
+ * @swagger
+ * /api/v1/payment/token/init:
+ *   post:
+ *     summary: Tạo URL lưu thẻ hoặc thanh toán + lưu thẻ (VNPAY Token)
+ *     tags: [Payment]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               userId: { type: string }
+ *               amount: { type: number, description: "Bắt buộc nếu mode=pay_and_create" }
+ *               orderInfo: { type: string }
+ *               cardType: { type: string, example: "01" }
+ *               bankCode: { type: string }
+ *               mode: { type: string, enum: ["token_create", "pay_and_create"], default: "pay_and_create" }
+ *               packageId: { type: string }
+ *     responses:
+ *       200:
+ *         description: URL VNPAY token
+ */
+router.post('/token/init', paymentController.createVnpayTokenUrl);
+
+/**
+ * @swagger
+ * /api/v1/payment/token/pay:
+ *   post:
+ *     summary: Tạo URL thanh toán bằng token đã lưu (VNPAY Token Pay)
+ *     tags: [Payment]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               userId: { type: string }
+ *               amount: { type: number }
+ *               orderInfo: { type: string }
+ *               token: { type: string }
+ *               cardType: { type: string, example: "01" }
+ *               bankCode: { type: string }
+ *               packageId: { type: string }
+ *     responses:
+ *       200:
+ *         description: URL VNPAY token pay
+ */
+router.post('/token/pay', paymentController.createVnpayTokenPayUrl);
+
 module.exports = router;
