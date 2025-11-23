@@ -27,6 +27,7 @@ var adminUserRouter = require('./src/routes/adminUser');
 var classRouter = require('./src/routes/class');
 var enrollmentRouter = require('./src/routes/enrollment');
 var customerVideoFavoritesRouter = require('./src/routes/customerVideoFavorites');
+var staffClassAttendanceRouter = require('./src/routes/staffClassAttendance');
 const mongoose = require('mongoose');
 const {
   evaluateClassesForBackground,
@@ -127,6 +128,7 @@ app.use('/users', usersRouter);
 app.use('/api/auth', authRouter);
 app.use('/api/staff/auth', staffAuthRouter);
 app.use('/api/staff', staffProfileRouter);
+app.use('/api/staff/classes', staffClassAttendanceRouter);
 app.use('/api/user', userRouter);
 app.use('/api/videos', videoRouter);
 app.use('/api/admin/staff', staffRouter);
