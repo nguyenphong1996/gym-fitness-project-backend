@@ -59,7 +59,7 @@ exports.createPaymentUrl = (req, amount, orderInfo, bankCode) => {
 
     let signData = querystring.stringify(vnp_Params, { encode: false });
     let hmac = crypto.createHmac("sha512", secretKey);
-    let signed = hmac.update(new Buffer(signData, 'utf-8')).digest("hex"); 
+    let signed = hmac.update(Buffer.from(signData, 'utf-8')).digest("hex"); 
     vnp_Params['vnp_SecureHash'] = signed;
     vnpUrl += '?' + querystring.stringify(vnp_Params, { encode: false });
 
@@ -80,7 +80,7 @@ exports.vnpayReturn = (req, res) => {
 
     let signData = querystring.stringify(vnp_Params, { encode: false });
     let hmac = crypto.createHmac("sha512", secretKey);
-    let signed = hmac.update(new Buffer(signData, 'utf-8')).digest("hex");     
+    let signed = hmac.update(Buffer.from(signData, 'utf-8')).digest("hex");     
 
     if(secureHash === signed){
         let rspCode = vnp_Params['vnp_ResponseCode'];
@@ -112,7 +112,7 @@ exports.vnpayIpn = (req, res) => {
     let secretKey = process.env.VNP_HASHSECRET;
     let signData = querystring.stringify(vnp_Params, { encode: false });
     let hmac = crypto.createHmac("sha512", secretKey);
-    let signed = hmac.update(new Buffer(signData, 'utf-8')).digest("hex");     
+    let signed = hmac.update(Buffer.from(signData, 'utf-8')).digest("hex");     
     
     // TODO: Implement actual logic to check order in your DB
     let paymentStatus = '0'; // Default: '0' initial, '1' success, '2' failed
