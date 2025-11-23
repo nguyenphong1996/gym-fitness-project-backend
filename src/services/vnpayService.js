@@ -1,6 +1,8 @@
 const moment = require('moment');
 const querystring = require('qs');
 const crypto = require("crypto");
+const axios = require('axios');
+const PaymentTransaction = require('../models/PaymentTransaction');
 
 function sortObject(obj) {
     let sorted = {};
@@ -17,6 +19,46 @@ function sortObject(obj) {
     }
     return sorted;
 }
+
+const normalizeField = (obj, keys) => {
+    for (const key of keys) {
+        if (obj[key] !== undefined) {
+            return obj[key];
+        }
+    }
+    return undefined;
+};
+
+const normalizeSecureHash = (obj) => normalizeField(obj, ['vnp_SecureHash', 'vnp_secure_hash']);
+
+const normalizeCommand = (obj) => normalizeField(obj, ['vnp_Command', 'vnp_command']) || '';
+
+const normalizeTxnRef = (obj) => normalizeField(obj, ['vnp_TxnRef', 'vnp_txn_ref']) || '';
+
+const normalizeAmount = (obj) => {
+    const amt = normalizeField(obj, ['vnp_Amount', 'vnp_amount']);
+    if (amt === undefined) return undefined;
+    const num = Number(amt);
+    return Number.isFinite(num) ? num : undefined;
+};
+
+const withSignedParams = (params, secretKey) => {
+    const sorted = sortObject(params);
+    const signData = querystring.stringify(sorted, { encode: false });
+    const hmac = crypto.createHmac("sha512", secretKey);
+    const signed = hmac.update(Buffer.from(signData, 'utf-8')).digest("hex");
+    return { sorted, secureHash: signed };
+};
+
+const buildTxnRef = () => moment().format('DDHHmmss');
+
+const getClientIp = (req) => {
+    return req.headers['x-forwarded-for'] ||
+        req.connection?.remoteAddress ||
+        req.socket?.remoteAddress ||
+        req.connection?.socket?.remoteAddress ||
+        '0.0.0.0';
+};
 
 exports.createPaymentUrl = (req, amount, orderInfo, bankCode) => {
     process.env.TZ = 'Asia/Ho_Chi_Minh';
@@ -66,87 +108,245 @@ exports.createPaymentUrl = (req, amount, orderInfo, bankCode) => {
     return vnpUrl;
 };
 
-exports.vnpayReturn = (req, res) => {
-    let vnp_Params = req.query;
-
-    let secureHash = vnp_Params['vnp_SecureHash'];
-
-    delete vnp_Params['vnp_SecureHash'];
-    delete vnp_Params['vnp_SecureHashType'];
-
-    vnp_Params = sortObject(vnp_Params);
-
-    let secretKey = process.env.VNP_HASHSECRET;
-
-    let signData = querystring.stringify(vnp_Params, { encode: false });
-    let hmac = crypto.createHmac("sha512", secretKey);
-    let signed = hmac.update(Buffer.from(signData, 'utf-8')).digest("hex");     
-
-    if(secureHash === signed){
-        let rspCode = vnp_Params['vnp_ResponseCode'];
-        // Kiem tra xem du lieu trong db co hop le hay khong va thong bao ket qua
-        // Ở đây cần thêm logic kiểm tra OrderId, Amount từ DB của bạn
-        if (rspCode === "00") {
-            // Thanh toán thành công
-            return { code: "00", message: "Success", orderId: vnp_Params['vnp_TxnRef'], amount: vnp_Params['vnp_Amount'] / 100 };
-        } else {
-            // Thanh toán thất bại
-            return { code: rspCode, message: "Failed", orderId: vnp_Params['vnp_TxnRef'] };
-        }
-    } else {
+exports.vnpayReturn = async (req) => {
+    const verification = exports.verifyVnpayParams(req.query);
+    if (!verification.isValid) {
         return { code: "97", message: "Checksum failed" };
     }
+
+    const { rspCode, transactionStatus, txnRef, params, amount } = verification;
+    const isSuccess = rspCode === '00' && transactionStatus === '00';
+    await exports.updateTransactionStatus({ txnRef, rspCode, transactionStatus, params, source: 'return' });
+
+    return {
+        code: rspCode,
+        message: isSuccess ? "Success" : "Failed",
+        orderId: txnRef,
+        amount: amount ? amount / 100 : undefined,
+    };
 };
 
-exports.vnpayIpn = (req, res) => {
-    let vnp_Params = req.query;
-    let secureHash = vnp_Params['vnp_SecureHash'];
-    
-    let orderId = vnp_Params['vnp_TxnRef'];
-    let rspCode = vnp_Params['vnp_ResponseCode'];
+/**
+ * Tạo URL thanh toán/token cho luồng token VNPAY
+ * command: 'token_create' | 'pay_and_create' | 'token_pay'
+ */
+exports.createTokenUrl = async (req, {
+    amount,
+    orderInfo,
+    userId,
+    token,
+    cardType = '01',
+    bankCode,
+    command = 'pay_and_create',
+    storeToken = 1,
+}) => {
+    process.env.TZ = 'Asia/Ho_Chi_Minh';
+    const date = new Date();
+    const createDate = moment(date).format('YYYYMMDDHHmmss');
+    const txnRef = buildTxnRef();
+    const ipAddr = getClientIp(req);
 
-    delete vnp_Params['vnp_SecureHash'];
-    delete vnp_Params['vnp_SecureHashType'];
+    const tmnCode = process.env.VNP_TMNCODE;
+    const secretKey = process.env.VNP_HASHSECRET;
+    const vnpVersion = process.env.VNP_VERSION || '2.1.0';
+    const baseReturnUrl = process.env.VNP_RETURNURL || process.env.VNP_TOKEN_RETURNURL;
+    const tokenCreateUrl = process.env.VNP_TOKEN_CREATE_URL || 'https://sandbox.vnpayment.vn/token_ui/create-token.html';
+    const payAndCreateUrl = process.env.VNP_TOKEN_PAY_CREATE_URL || 'https://sandbox.vnpayment.vn/token_ui/pay-create-token.html';
+    const tokenPayUrl = process.env.VNP_TOKEN_PAY_URL || 'https://sandbox.vnpayment.vn/token_ui/payment-token.html';
+    const targetUrl = command === 'token_create' ? tokenCreateUrl : (command === 'token_pay' ? tokenPayUrl : payAndCreateUrl);
 
-    vnp_Params = sortObject(vnp_Params);
-    let secretKey = process.env.VNP_HASHSECRET;
-    let signData = querystring.stringify(vnp_Params, { encode: false });
-    let hmac = crypto.createHmac("sha512", secretKey);
-    let signed = hmac.update(Buffer.from(signData, 'utf-8')).digest("hex");     
-    
-    // TODO: Implement actual logic to check order in your DB
-    let paymentStatus = '0'; // Default: '0' initial, '1' success, '2' failed
-    let checkOrderId = true; // Placeholder: check if orderId exists in your DB
-    let checkAmount = true; // Placeholder: check if amount matches order in your DB
+    const params = {
+        vnp_version: vnpVersion,
+        vnp_command: command,
+        vnp_tmn_code: tmnCode,
+        vnp_app_user_id: userId,
+        vnp_txn_ref: txnRef,
+        vnp_txn_desc: orderInfo || `Thanh toan va luu the ${txnRef}`,
+        vnp_ip_addr: ipAddr,
+        vnp_create_date: createDate,
+        vnp_locale: 'vi',
+        vnp_return_url: baseReturnUrl,
+        vnp_cancel_url: baseReturnUrl,
+    };
 
-    if(secureHash === signed){ //kiểm tra checksum
-        if(checkOrderId){
-            if(checkAmount){
-                if(paymentStatus=="0"){ //kiểm tra tình trạng giao dịch trước khi cập nhật tình trạng thanh toán
-                    if(rspCode=="00"){
-                        //thanh cong
-                        // TODO: Update payment status to '1' (success) in your DB
-                        res.status(200).json({RspCode: '00', Message: 'Success'})
-                    }
-                    else {
-                        //that bai
-                        // TODO: Update payment status to '2' (failed) in your DB
-                        res.status(200).json({RspCode: '00', Message: 'Success'})
-                    }
-                }
-                else{
-                    res.status(200).json({RspCode: '02', Message: 'This order has been updated to the payment status'})
-                }
-            }
-            else{
-                res.status(200).json({RspCode: '04', Message: 'Amount invalid'})
-            }
-        }       
-        else {
-            res.status(200).json({RspCode: '01', Message: 'Order not found'})
-        }
+    if (cardType) {
+        params['vnp_card_type'] = cardType; // 01 noi dia, 02 quoc te
     }
-    else {
-        res.status(200).json({RspCode: '97', Message: 'Checksum failed'})
+
+    if (bankCode) {
+        params['vnp_bank_code'] = bankCode;
+    }
+
+    // Với token_pay và pay_and_create cần số tiền
+    if (command !== 'token_create') {
+        params['vnp_amount'] = Math.round((amount || 0) * 100); // VNPAY yêu cầu nhân 100
+        params['vnp_curr_code'] = 'VND';
+    }
+
+    if (command === 'token_pay') {
+        params['vnp_token'] = token;
+    }
+
+    if (command === 'pay_and_create') {
+        params['vnp_store_token'] = storeToken ? 1 : 0;
+    }
+
+    const { sorted, secureHash } = withSignedParams(params, secretKey);
+    sorted['vnp_secure_hash'] = secureHash;
+
+    const url = targetUrl + '?' + querystring.stringify(sorted, { encode: false });
+
+    // Lưu log pending
+    await PaymentTransaction.create({
+        txnRef,
+        channel: command === 'token_pay' ? 'vnpay_token_pay' : (command === 'token_create' ? 'vnpay_token_create' : 'vnpay_pay_and_create'),
+        userId,
+        amount: amount || 0,
+        orderInfo,
+        status: 'pending',
+    });
+
+    return { vnpUrl: url, txnRef };
+};
+
+/**
+ * Xác thực checksum + map dữ liệu trả về từ VNPAY (return/IPN)
+ */
+exports.verifyVnpayParams = (vnpParamsRaw) => {
+    const vnp_Params = { ...vnpParamsRaw };
+    const secureHash = normalizeSecureHash(vnp_Params);
+    delete vnp_Params['vnp_SecureHash'];
+    delete vnp_Params['vnp_secure_hash'];
+    delete vnp_Params['vnp_SecureHashType'];
+    delete vnp_Params['vnp_secure_hash_type'];
+
+    const secretKey = process.env.VNP_HASHSECRET;
+    const { secureHash: expectedHash } = withSignedParams(vnp_Params, secretKey);
+    const isValid = secureHash === expectedHash;
+
+    const rspCode = normalizeField(vnp_Params, ['vnp_ResponseCode', 'vnp_response_code']);
+    const transactionStatus = normalizeField(vnp_Params, ['vnp_TransactionStatus', 'vnp_transaction_status']);
+    const txnRef = normalizeTxnRef(vnp_Params);
+    const amount = normalizeAmount(vnp_Params);
+
+    return {
+        isValid,
+        rspCode,
+        transactionStatus,
+        txnRef,
+        amount,
+        params: vnp_Params,
+    };
+};
+
+/**
+ * Cập nhật trạng thái giao dịch sau khi xác thực VNPAY
+ */
+exports.updateTransactionStatus = async ({ txnRef, rspCode, transactionStatus, params, source = 'return' }) => {
+    if (!txnRef) return null;
+    const tx = await PaymentTransaction.findOne({ txnRef });
+    if (!tx) return null;
+
+    const isSuccess = rspCode === '00' && transactionStatus === '00';
+    const nextStatus = isSuccess ? 'paid' : 'failed';
+
+    // Chỉ cập nhật nếu chưa paid
+    if (tx.status !== 'paid') {
+        tx.status = nextStatus;
+        tx.responseCode = rspCode;
+        tx.transactionStatus = transactionStatus;
+        tx.vnpTransactionNo = normalizeField(params, ['vnp_TransactionNo', 'vnp_transaction_no']) || tx.vnpTransactionNo;
+        tx.bankCode = normalizeField(params, ['vnp_BankCode', 'vnp_bank_code']) || tx.bankCode;
+        tx.cardType = normalizeField(params, ['vnp_card_type', 'vnp_CardType']) || tx.cardType;
+        tx.token = normalizeField(params, ['vnp_token', 'vnp_Token']) || tx.token;
+        tx.paidAt = isSuccess ? (tx.paidAt || new Date()) : tx.paidAt;
+    }
+
+    if (source === 'ipn') {
+        tx.rawIpnParams = params;
+    } else {
+        tx.rawReturnParams = params;
+    }
+
+    await tx.save();
+    return tx;
+};
+
+/**
+ * QueryDR tới VNPAY để chốt trạng thái
+ */
+exports.queryDr = async ({ txnRef, transactionDate }) => {
+    const url = process.env.VNP_QUERY_URL || 'https://sandbox.vnpayment.vn/merchant_webapi/api/transaction';
+    const requestId = `${moment().format('YYYYMMDDHHmmss')}-${Math.floor(Math.random() * 1000)}`;
+    const createDate = moment().format('YYYYMMDDHHmmss');
+    const tmnCode = process.env.VNP_TMNCODE;
+    const secretKey = process.env.VNP_HASHSECRET;
+    const version = process.env.VNP_VERSION || '2.1.0';
+    const ipAddr = '0.0.0.0';
+
+    const payload = {
+        vnp_RequestId: requestId,
+        vnp_Version: version,
+        vnp_Command: 'querydr',
+        vnp_TmnCode: tmnCode,
+        vnp_TxnRef: txnRef,
+        vnp_OrderInfo: `Query transaction ${txnRef}`,
+        vnp_TransactionDate: transactionDate || moment().format('YYYYMMDDHHmmss'),
+        vnp_CreateDate: createDate,
+        vnp_IpAddr: ipAddr,
+    };
+
+    const data = `${payload.vnp_RequestId}|${payload.vnp_Version}|${payload.vnp_Command}|${payload.vnp_TmnCode}|${payload.vnp_TxnRef}|${payload.vnp_TransactionDate}|${payload.vnp_CreateDate}|${payload.vnp_IpAddr}|${payload.vnp_OrderInfo}`;
+    const checksum = crypto.createHmac('sha512', secretKey).update(data).digest('hex');
+    payload.vnp_SecureHash = checksum;
+
+    const response = await axios.post(url, payload, { headers: { 'Content-Type': 'application/json' }, timeout: 15000 });
+    return response.data;
+};
+
+exports.vnpayIpn = async (req, res) => {
+    try {
+        const verification = exports.verifyVnpayParams(req.query);
+        if (!verification.isValid) {
+            return res.status(200).json({ RspCode: '97', Message: 'Checksum failed' });
+        }
+
+        const { rspCode, transactionStatus, txnRef, amount, params } = verification;
+        if (!txnRef) {
+            return res.status(200).json({ RspCode: '01', Message: 'Order not found' });
+        }
+
+        // Cập nhật giao dịch
+        const updated = await exports.updateTransactionStatus({ txnRef, rspCode, transactionStatus, params, source: 'ipn' });
+        if (!updated) {
+            return res.status(200).json({ RspCode: '01', Message: 'Order not found' });
+        }
+
+        // (Tuỳ chọn) kiểm tra amount khớp
+        if (amount && updated.amount && Math.round(updated.amount * 100) !== amount) {
+            return res.status(200).json({ RspCode: '04', Message: 'Amount invalid' });
+        }
+
+        // (Tuỳ chọn) QueryDR để chốt trạng thái
+        try {
+            const queryResult = await exports.queryDr({ txnRef, transactionDate: params?.vnp_CreateDate });
+            const isOk = queryResult?.vnp_ResponseCode === '00' && queryResult?.vnp_TransactionStatus === '00';
+            if (isOk && updated.status !== 'paid') {
+                await exports.updateTransactionStatus({
+                    txnRef,
+                    rspCode: queryResult.vnp_ResponseCode,
+                    transactionStatus: queryResult.vnp_TransactionStatus,
+                    params: queryResult,
+                    source: 'ipn',
+                });
+            }
+        } catch (err) {
+            console.error('QueryDR failed (sandbox may be unreachable):', err.message);
+        }
+
+        return res.status(200).json({ RspCode: '00', Message: 'Success' });
+    } catch (error) {
+        console.error('Error in vnpayIpn:', error);
+        return res.status(500).json({ RspCode: '99', Message: 'Internal error' });
     }
 };

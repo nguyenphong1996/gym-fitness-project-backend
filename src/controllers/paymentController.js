@@ -1,5 +1,6 @@
 const vnpayService = require('../services/vnpayService');
 const Enrollment = require('../models/Enrollment'); // Assuming Enrollment model is relevant
+const PaymentTransaction = require('../models/PaymentTransaction');
 
 exports.createPaymentUrl = async (req, res, next) => {
     try {
@@ -18,9 +19,15 @@ exports.createPaymentUrl = async (req, res, next) => {
 
 exports.vnpayReturn = async (req, res, next) => {
     try {
-        const result = vnpayService.vnpayReturn(req, res);
+        const result = await vnpayService.vnpayReturn(req);
         const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
-        
+
+        // Nếu client mong muốn JSON (mobile app), trả JSON
+        const acceptsJson = (req.headers.accept || '').includes('application/json');
+        if (acceptsJson) {
+            return res.status(200).json(result);
+        }
+
         const queryParams = new URLSearchParams({
             orderId: result.orderId,
             status: result.code,
@@ -47,11 +54,81 @@ exports.vnpayReturn = async (req, res, next) => {
 
 exports.vnpayIpn = async (req, res, next) => {
     try {
-        vnpayService.vnpayIpn(req, res);
-        // The vnpayService.vnpayIpn already sends the response
-        // TODO: Ensure database update logic is implemented in vnpayService.vnpayIpn
+        await vnpayService.vnpayIpn(req, res);
     } catch (error) {
         console.error('Error handling VNPAY IPN:', error);
+        next(error);
+    }
+};
+
+/**
+ * Tạo URL lưu thẻ (token_create) hoặc thanh toán + lưu thẻ (pay_and_create) cho VNPAY Token
+ */
+exports.createVnpayTokenUrl = async (req, res, next) => {
+    try {
+        const { amount = 0, orderInfo, cardType = '01', bankCode, mode = 'pay_and_create', userId, packageId } = req.body;
+        if (!userId) {
+            return res.status(400).json({ message: 'userId is required' });
+        }
+        if (mode !== 'token_create' && !amount) {
+            return res.status(400).json({ message: 'amount is required for pay_and_create' });
+        }
+
+        const command = mode === 'token_create' ? 'token_create' : 'pay_and_create';
+        const { vnpUrl, txnRef } = await vnpayService.createTokenUrl(req, {
+            amount,
+            orderInfo,
+            userId,
+            cardType,
+            bankCode,
+            command,
+        });
+
+        // Ghi nhận transaction (cập nhật thêm packageId nếu có)
+        if (packageId) {
+            await PaymentTransaction.updateOne({ txnRef }, { $set: { packageId } });
+        }
+
+        return res.status(200).json({ vnpUrl, txnRef });
+    } catch (error) {
+        console.error('Error creating VNPAY token URL:', error);
+        next(error);
+    }
+};
+
+/**
+ * Tạo URL thanh toán bằng token đã lưu (token_pay)
+ */
+exports.createVnpayTokenPayUrl = async (req, res, next) => {
+    try {
+        const { amount, orderInfo, token, userId, cardType = '01', bankCode, packageId } = req.body;
+        if (!amount) {
+            return res.status(400).json({ message: 'amount is required' });
+        }
+        if (!token) {
+            return res.status(400).json({ message: 'token is required' });
+        }
+        if (!userId) {
+            return res.status(400).json({ message: 'userId is required' });
+        }
+
+        const { vnpUrl, txnRef } = await vnpayService.createTokenUrl(req, {
+            amount,
+            orderInfo,
+            userId,
+            token,
+            cardType,
+            bankCode,
+            command: 'token_pay',
+        });
+
+        if (packageId) {
+            await PaymentTransaction.updateOne({ txnRef }, { $set: { packageId } });
+        }
+
+        return res.status(200).json({ vnpUrl, txnRef });
+    } catch (error) {
+        console.error('Error creating VNPAY token pay URL:', error);
         next(error);
     }
 };
