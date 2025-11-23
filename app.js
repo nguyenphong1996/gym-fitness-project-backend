@@ -28,6 +28,8 @@ var classRouter = require('./src/routes/class');
 var enrollmentRouter = require('./src/routes/enrollment');
 var customerVideoFavoritesRouter = require('./src/routes/customerVideoFavorites');
 var staffClassAttendanceRouter = require('./src/routes/staffClassAttendance');
+var paymentRouter = require('./src/routes/payment'); // Added for VNPAY
+
 const mongoose = require('mongoose');
 const {
   evaluateClassesForBackground,
@@ -137,6 +139,8 @@ app.use('/api/admin/classes', classRouter);
 app.use('/api/customer/videos', customerVideoFavoritesRouter);
 app.use('/api/customer/pt', customerPtBookingRouter);
 app.use('/api/customer', enrollmentRouter);
+app.use('/api/v1/payment', paymentRouter); // Added for VNPAY
+
 
 /**
  * Background scheduler: evaluate class lifecycle to keep statuses up to date.
