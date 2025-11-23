@@ -5,7 +5,7 @@ Backend API - Xác thực OTP qua SMS, Quản lý User Profile, Class Management
 ## 📚 API Documentation
 
 **Swagger UI:** http://localhost:3000/api-docs  
-**Production:** https://be.phongnguyen.software/api-docs
+**Production:** https://be.vnchack.com/api-docs
 
 ### Authentication Endpoints:
 - `POST /api/auth/register` - Gửi OTP đăng ký

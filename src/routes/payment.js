@@ -53,7 +53,7 @@ const paymentController = require('../controllers/paymentController');
  *                   format: uri
  *                   example: "https://sandbox.vnpayment.vn/paymentv2/vpcpay.html?vnp_Amount=180000000&..."
  *       400:
- *         description: Dữ liệu đầu vào không hợp lệ (ví dụ: thiếu `amount`).
+ *         description: "Dữ liệu đầu vào không hợp lệ (ví dụ: thiếu `amount`)."
  *         content:
  *           application/json:
  *             schema:
