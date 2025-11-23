@@ -11,7 +11,7 @@ const options = {
     },
     servers: [
       {
-        url: 'https://be.phongnguyen.software',
+        url: 'https://be.vnchack.com',
         description: 'Production server'
       },
       {
