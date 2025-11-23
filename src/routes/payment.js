@@ -2,8 +2,157 @@ const express = require('express');
 const router = express.Router();
 const paymentController = require('../controllers/paymentController');
 
+/**
+ * @swagger
+ * tags:
+ *   name: Payment
+ *   description: API tích hợp thanh toán VNPAY
+ */
+
+/**
+ * @swagger
+ * /api/v1/payment/create-payment-url:
+ *   post:
+ *     summary: Tạo URL thanh toán VNPAY
+ *     description: Nhận thông tin đơn hàng và tạo một URL để chuyển hướng người dùng đến cổng thanh toán VNPAY.
+ *     tags: [Payment]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - amount
+ *               - orderInfo
+ *             properties:
+ *               amount:
+ *                 type: number
+ *                 description: "Tổng số tiền thanh toán (bắt buộc)."
+ *                 example: 1800000
+ *               orderInfo:
+ *                 type: string
+ *                 description: "Thông tin mô tả đơn hàng (bắt buộc)."
+ *                 example: "Thanh toan goi hoi vien Premium 12 thang"
+ *               bankCode:
+ *                 type: string
+ *                 description: "Mã ngân hàng. Nếu không có, VNPAY sẽ hiển thị danh sách ngân hàng để người dùng chọn."
+ *                 example: "NCB"
+ *     responses:
+ *       200:
+ *         description: Trả về URL thanh toán VNPAY.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 vnpUrl:
+ *                   type: string
+ *                   format: uri
+ *                   example: "https://sandbox.vnpayment.vn/paymentv2/vpcpay.html?vnp_Amount=180000000&..."
+ *       400:
+ *         description: Dữ liệu đầu vào không hợp lệ (ví dụ: thiếu `amount`).
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "Amount is required"
+ *       500:
+ *         description: Lỗi máy chủ khi tạo URL.
+ */
 router.post('/create-payment-url', paymentController.createPaymentUrl);
+
+/**
+ * @swagger
+ * /api/v1/payment/vnpay-return:
+ *   get:
+ *     summary: Xử lý kết quả VNPAY trả về
+ *     description: |
+ *       Endpoint để VNPAY chuyển hướng người dùng trở lại sau khi hoàn tất thanh toán.
+ *       API sẽ xác thực chữ ký, cập nhật trạng thái đơn hàng và chuyển hướng người dùng về trang thông báo kết quả trên frontend.
+ *       **Lưu ý:** Người dùng không gọi trực tiếp API này.
+ *     tags: [Payment]
+ *     parameters:
+ *       - in: query
+ *         name: vnp_Amount
+ *         schema: { type: string }
+ *         description: Số tiền giao dịch.
+ *       - in: query
+ *         name: vnp_BankCode
+ *         schema: { type: string }
+ *         description: Mã ngân hàng.
+ *       - in: query
+ *         name: vnp_ResponseCode
+ *         schema: { type: string }
+ *         description: "Mã phản hồi từ VNPAY (`00` = thành công)."
+ *       - in: query
+ *         name: vnp_TxnRef
+ *         schema: { type: string }
+ *         description: Mã tham chiếu của giao dịch.
+ *       - in: query
+ *         name: vnp_SecureHash
+ *         schema: { type: string }
+ *         description: Chữ ký bảo mật để xác thực.
+ *     responses:
+ *       302:
+ *         description: Chuyển hướng về trang frontend với kết quả thanh toán.
+ *         headers:
+ *           Location:
+ *             schema:
+ *               type: string
+ *               example: "http://localhost:8081/payment-status?orderId=12345&status=00&message=Success"
+ *       500:
+ *         description: Lỗi máy chủ hoặc xác thực chữ ký thất bại.
+ */
 router.get('/vnpay-return', paymentController.vnpayReturn);
+
+/**
+ * @swagger
+ * /api/v1/payment/vnpay-ipn:
+ *   get:
+ *     summary: Xử lý thông báo IPN từ VNPAY
+ *     description: |
+ *       Endpoint để VNPAY gửi thông báo kết quả giao dịch ngầm (server-to-server).
+ *       Đây là phương thức xác nhận thanh toán đáng tin cậy nhất.
+ *       API sẽ xác thực và cập nhật trạng thái đơn hàng trong cơ sở dữ liệu.
+ *       **Lưu ý:** Người dùng không gọi trực tiếp API này.
+ *     tags: [Payment]
+ *     parameters:
+ *       - in: query
+ *         name: vnp_Amount
+ *         schema: { type: string }
+ *       - in: query
+ *         name: vnp_BankCode
+ *         schema: { type: string }
+ *       - in: query
+ *         name: vnp_ResponseCode
+ *         schema: { type: string }
+ *       - in: query
+ *         name: vnp_TxnRef
+ *         schema: { type: string }
+ *       - in: query
+ *         name: vnp_SecureHash
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: Phản hồi cho VNPAY biết đã nhận và xử lý thành công/thất bại.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 RspCode:
+ *                   type: string
+ *                   example: "00"
+ *                 Message:
+ *                   type: string
+ *                   example: "Success"
+ */
 router.get('/vnpay-ipn', paymentController.vnpayIpn);
 
 module.exports = router;

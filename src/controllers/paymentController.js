@@ -19,22 +19,26 @@ exports.createPaymentUrl = async (req, res, next) => {
 exports.vnpayReturn = async (req, res, next) => {
     try {
         const result = vnpayService.vnpayReturn(req, res);
+        const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
         
+        const queryParams = new URLSearchParams({
+            orderId: result.orderId,
+            status: result.code,
+            message: result.message
+        }).toString();
+
         // TODO: Implement actual database update logic here based on result.orderId and result.code
         if (result.code === "00") {
             // Payment success: Update enrollment status in DB
-            // Example:
-            // await Enrollment.findOneAndUpdate({ orderId: result.orderId }, { paymentStatus: 'paid', paidAmount: result.amount });
             console.log(`Payment successful for Order ID: ${result.orderId}, Amount: ${result.amount}`);
         } else {
             // Payment failed: Log or update enrollment status as failed
             console.log(`Payment failed for Order ID: ${result.orderId}, Code: ${result.code}`);
         }
 
-        // Redirect to frontend success/failure page
-        // You might want to include orderId and status in the redirect URL
-        // Example: res.redirect(`${process.env.FRONTEND_URL}/payment-status?orderId=${result.orderId}&status=${result.code}`);
-        res.status(200).json(result); // For now, just send JSON response
+        // Redirect to a dedicated frontend page to show payment status
+        res.redirect(`${frontendUrl}/payment-status?${queryParams}`);
+
     } catch (error) {
         console.error('Error handling VNPAY return:', error);
         next(error);
