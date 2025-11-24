@@ -224,7 +224,14 @@ exports.createTokenUrl = async (req, {
  * Xác thực checksum + map dữ liệu trả về từ VNPAY (return/IPN)
  */
 exports.verifyVnpayParams = (vnpParamsRaw) => {
-    const vnp_Params = { ...vnpParamsRaw };
+    const vnp_Params = {};
+    // Chỉ giữ lại các tham số bắt đầu bằng vnp_ để tránh key ngoài (ví dụ platform) làm sai checksum
+    Object.keys(vnpParamsRaw || {}).forEach((key) => {
+        if (key.toLowerCase().startsWith('vnp_')) {
+            vnp_Params[key] = vnpParamsRaw[key];
+        }
+    });
+
     const secureHash = normalizeSecureHash(vnp_Params);
     delete vnp_Params['vnp_SecureHash'];
     delete vnp_Params['vnp_secure_hash'];
