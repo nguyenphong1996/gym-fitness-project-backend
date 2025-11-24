@@ -3,6 +3,12 @@ const querystring = require('qs');
 const crypto = require("crypto");
 const axios = require('axios');
 const PaymentTransaction = require('../models/PaymentTransaction');
+const appendPlatformParam = (url) => {
+    if (!url) return url;
+    const hasQuery = url.includes('?');
+    const joiner = hasQuery ? '&' : '?';
+    return `${url}${joiner}platform=app`;
+};
 
 function sortObject(obj) {
     let sorted = {};
@@ -75,7 +81,7 @@ exports.createPaymentUrl = (req, amount, orderInfo, bankCode) => {
     let tmnCode = process.env.VNP_TMNCODE;
     let secretKey = process.env.VNP_HASHSECRET;
     let vnpUrl = process.env.VNP_URL;
-    let returnUrl = process.env.VNP_RETURNURL;
+    let returnUrl = appendPlatformParam(process.env.VNP_RETURNURL);
     let vnpVersion = process.env.VNP_VERSION;
     
     let locale = 'vn'; // Assuming default locale is 'vn'
@@ -149,7 +155,7 @@ exports.createTokenUrl = async (req, {
     const tmnCode = process.env.VNP_TMNCODE;
     const secretKey = process.env.VNP_HASHSECRET;
     const vnpVersion = process.env.VNP_VERSION || '2.1.0';
-    const baseReturnUrl = process.env.VNP_RETURNURL || process.env.VNP_TOKEN_RETURNURL || '';
+    const baseReturnUrl = appendPlatformParam(process.env.VNP_RETURNURL || process.env.VNP_TOKEN_RETURNURL || '');
     const tokenCreateUrl = process.env.VNP_TOKEN_CREATE_URL || 'https://sandbox.vnpayment.vn/token_ui/create-token.html';
     const payAndCreateUrl = process.env.VNP_TOKEN_PAY_CREATE_URL || 'https://sandbox.vnpayment.vn/token_ui/pay-create-token.html';
     const tokenPayUrl = process.env.VNP_TOKEN_PAY_URL || 'https://sandbox.vnpayment.vn/token_ui/payment-token.html';
