@@ -1,6 +1,7 @@
 const vnpayService = require('../services/vnpayService');
 const Enrollment = require('../models/Enrollment'); // Assuming Enrollment model is relevant
 const PaymentTransaction = require('../models/PaymentTransaction');
+const PaymentToken = require('../models/PaymentToken');
 
 exports.createPaymentUrl = async (req, res, next) => {
     try {
@@ -161,6 +162,40 @@ exports.getTransactionStatus = async (req, res, next) => {
         });
     } catch (error) {
         console.error('Error getting transaction status:', error);
+        next(error);
+    }
+};
+
+/**
+ * Lấy danh sách token theo userId
+ */
+exports.getPaymentTokens = async (req, res, next) => {
+    try {
+        const { userId } = req.query;
+        if (!userId) {
+            return res.status(400).json({ message: 'userId is required' });
+        }
+        const tokens = await PaymentToken.find({ userId, status: 'active' }).sort({ isDefault: -1, createdAt: -1 });
+        res.status(200).json(tokens);
+    } catch (error) {
+        console.error('Error getting payment tokens:', error);
+        next(error);
+    }
+};
+
+/**
+ * Xóa token theo id
+ */
+exports.deletePaymentToken = async (req, res, next) => {
+    try {
+        const { id } = req.params;
+        if (!id) {
+            return res.status(400).json({ message: 'id is required' });
+        }
+        await PaymentToken.updateOne({ _id: id }, { $set: { status: 'disabled', isDefault: false } });
+        res.status(200).json({ message: 'Deleted' });
+    } catch (error) {
+        console.error('Error deleting payment token:', error);
         next(error);
     }
 };

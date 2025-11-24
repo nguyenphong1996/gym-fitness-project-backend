@@ -3,6 +3,7 @@ const querystring = require('qs');
 const crypto = require("crypto");
 const axios = require('axios');
 const PaymentTransaction = require('../models/PaymentTransaction');
+const PaymentToken = require('../models/PaymentToken');
 const appendPlatformParam = (url) => {
     if (!url) return url;
     const hasQuery = url.includes('?');
@@ -263,6 +264,48 @@ exports.verifyVnpayParams = (vnpParamsRaw) => {
     };
 };
 
+const savePaymentTokenIfAny = async (params) => {
+    try {
+        const token = normalizeField(params, ['vnp_token', 'vnp_Token']);
+        const cardMask = normalizeField(params, ['vnp_card_number', 'vnp_CardNumber']);
+        const cardType = normalizeField(params, ['vnp_card_type', 'vnp_CardType']);
+        const bankCode = normalizeField(params, ['vnp_bank_code', 'vnp_BankCode']);
+        const tmnCode = normalizeField(params, ['vnp_tmn_code', 'vnp_TmnCode']) || process.env.VNP_TMNCODE;
+        const appUserId = normalizeField(params, ['vnp_app_user_id', 'vnp_App_User_Id']);
+        const command = normalizeField(params, ['vnp_command', 'vnp_Command']);
+
+        if (!token || !appUserId) {
+            return;
+        }
+
+        // Chỉ lưu token khi command là token_create hoặc pay_and_create
+        if (command !== 'token_create' && command !== 'pay_and_create') {
+            return;
+        }
+
+        // Reset isDefault=true cho token đầu tiên của user
+        const existing = await PaymentToken.findOne({ userId: appUserId, status: 'active' });
+        const isDefault = !existing;
+
+        await PaymentToken.findOneAndUpdate(
+            { userId: appUserId, token },
+            {
+                userId: appUserId,
+                token,
+                cardMask,
+                cardType,
+                bankCode,
+                tmnCode,
+                status: 'active',
+                isDefault,
+            },
+            { upsert: true, new: true }
+        );
+    } catch (err) {
+        console.error('Không lưu được PaymentToken:', err.message);
+    }
+};
+
 /**
  * Cập nhật trạng thái giao dịch sau khi xác thực VNPAY
  */
@@ -293,6 +336,13 @@ exports.updateTransactionStatus = async ({ txnRef, rspCode, transactionStatus, p
     }
 
     await tx.save();
+
+    // Lưu token nếu có trong params và giao dịch thành công
+    const isSuccess = rspCode === '00' && transactionStatus === '00';
+    if (isSuccess) {
+        await savePaymentTokenIfAny(params);
+    }
+
     return tx;
 };
 

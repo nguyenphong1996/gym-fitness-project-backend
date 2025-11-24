@@ -210,4 +210,8 @@ router.post('/token/pay', paymentController.createVnpayTokenPayUrl);
 // App dùng để polling trạng thái giao dịch theo txnRef (phục vụ SDK)
 router.get('/transaction/:txnRef', paymentController.getTransactionStatus);
 
+// Danh sách/xóa token
+router.get('/tokens', paymentController.getPaymentTokens);
+router.delete('/tokens/:id', paymentController.deletePaymentToken);
+
 module.exports = router;
