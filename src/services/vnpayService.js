@@ -149,11 +149,18 @@ exports.createTokenUrl = async (req, {
     const tmnCode = process.env.VNP_TMNCODE;
     const secretKey = process.env.VNP_HASHSECRET;
     const vnpVersion = process.env.VNP_VERSION || '2.1.0';
-    const baseReturnUrl = process.env.VNP_RETURNURL || process.env.VNP_TOKEN_RETURNURL;
+    const baseReturnUrl = process.env.VNP_RETURNURL || process.env.VNP_TOKEN_RETURNURL || '';
     const tokenCreateUrl = process.env.VNP_TOKEN_CREATE_URL || 'https://sandbox.vnpayment.vn/token_ui/create-token.html';
     const payAndCreateUrl = process.env.VNP_TOKEN_PAY_CREATE_URL || 'https://sandbox.vnpayment.vn/token_ui/pay-create-token.html';
     const tokenPayUrl = process.env.VNP_TOKEN_PAY_URL || 'https://sandbox.vnpayment.vn/token_ui/payment-token.html';
     const targetUrl = command === 'token_create' ? tokenCreateUrl : (command === 'token_pay' ? tokenPayUrl : payAndCreateUrl);
+
+    if (!tmnCode || !secretKey) {
+        throw new Error('Thiếu cấu hình VNPAY: VNP_TMNCODE hoặc VNP_HASHSECRET');
+    }
+    if (!baseReturnUrl) {
+        throw new Error('Thiếu cấu hình VNP_RETURNURL/VNP_TOKEN_RETURNURL');
+    }
 
     const params = {
         vnp_version: vnpVersion,
@@ -196,15 +203,19 @@ exports.createTokenUrl = async (req, {
 
     const url = targetUrl + '?' + querystring.stringify(sorted, { encode: false });
 
-    // Lưu log pending
-    await PaymentTransaction.create({
-        txnRef,
-        channel: command === 'token_pay' ? 'vnpay_token_pay' : (command === 'token_create' ? 'vnpay_token_create' : 'vnpay_pay_and_create'),
-        userId,
-        amount: amount || 0,
-        orderInfo,
-        status: 'pending',
-    });
+    // Lưu log pending (không làm hỏng flow nếu DB lỗi)
+    try {
+        await PaymentTransaction.create({
+            txnRef,
+            channel: command === 'token_pay' ? 'vnpay_token_pay' : (command === 'token_create' ? 'vnpay_token_create' : 'vnpay_pay_and_create'),
+            userId,
+            amount: amount || 0,
+            orderInfo,
+            status: 'pending',
+        });
+    } catch (err) {
+        console.error('Không lưu được PaymentTransaction:', err.message);
+    }
 
     return { vnpUrl: url, txnRef };
 };

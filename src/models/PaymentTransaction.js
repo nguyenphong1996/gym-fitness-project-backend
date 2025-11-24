@@ -3,8 +3,8 @@ const mongoose = require('mongoose');
 const paymentTransactionSchema = new mongoose.Schema({
   txnRef: { type: String, required: true, index: true },
   channel: { type: String, enum: ['vnpay_pay', 'vnpay_token_create', 'vnpay_pay_and_create', 'vnpay_token_pay'], required: true },
-  userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', index: true },
-  packageId: { type: mongoose.Schema.Types.ObjectId, ref: 'Enrollment' },
+  userId: { type: String, index: true }, // Lưu string để tránh lỗi cast khi nhận từ client
+  packageId: { type: String }, // Gói/plan từ client, có thể không phải ObjectId
   orderInfo: { type: String },
   amount: { type: Number, default: 0 }, // đơn vị VND, chưa nhân 100
   currency: { type: String, default: 'VND' },
