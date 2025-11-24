@@ -208,10 +208,87 @@ router.post('/token/init', paymentController.createVnpayTokenUrl);
 router.post('/token/pay', paymentController.createVnpayTokenPayUrl);
 
 // App dùng để polling trạng thái giao dịch theo txnRef (phục vụ SDK)
+/**
+ * @swagger
+ * /api/v1/payment/transaction/{txnRef}:
+ *   get:
+ *     summary: Lấy trạng thái giao dịch VNPAY theo txnRef
+ *     tags: [Payment]
+ *     parameters:
+ *       - in: path
+ *         name: txnRef
+ *         required: true
+ *         schema: { type: string }
+ *         description: Mã tham chiếu giao dịch (vnp_TxnRef)
+ *     responses:
+ *       200:
+ *         description: Thông tin trạng thái giao dịch
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 txnRef: { type: string }
+ *                 status: { type: string, enum: ["pending","paid","failed"] }
+ *                 responseCode: { type: string, nullable: true }
+ *                 transactionStatus: { type: string, nullable: true }
+ *                 amount: { type: number }
+ *                 paidAt: { type: string, format: date-time, nullable: true }
+ *                 channel: { type: string }
+ *       404:
+ *         description: Transaction not found
+ */
 router.get('/transaction/:txnRef', paymentController.getTransactionStatus);
 
 // Danh sách/xóa token
+/**
+ * @swagger
+ * /api/v1/payment/tokens:
+ *   get:
+ *     summary: Lấy danh sách thẻ/token đã lưu của người dùng
+ *     tags: [Payment]
+ *     parameters:
+ *       - in: query
+ *         name: userId
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: Danh sách token
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 type: object
+ *                 properties:
+ *                   _id: { type: string }
+ *                   userId: { type: string }
+ *                   token: { type: string }
+ *                   cardMask: { type: string }
+ *                   cardType: { type: string }
+ *                   bankCode: { type: string }
+ *                   isDefault: { type: boolean }
+ *                   status: { type: string }
+ */
 router.get('/tokens', paymentController.getPaymentTokens);
+/**
+ * @swagger
+ * /api/v1/payment/tokens/{id}:
+ *   delete:
+ *     summary: Xóa/disable token đã lưu
+ *     tags: [Payment]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: Deleted
+ *       404:
+ *         description: Token not found
+ */
 router.delete('/tokens/:id', paymentController.deletePaymentToken);
 
 module.exports = router;
