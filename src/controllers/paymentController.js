@@ -92,7 +92,7 @@ exports.createVnpayTokenUrl = async (req, res, next) => {
         return res.status(200).json({ vnpUrl, txnRef });
     } catch (error) {
         console.error('Error creating VNPAY token URL:', error);
-        next(error);
+        return res.status(500).json({ message: error.message || 'Internal Server Error' });
     }
 };
 
@@ -129,6 +129,6 @@ exports.createVnpayTokenPayUrl = async (req, res, next) => {
         return res.status(200).json({ vnpUrl, txnRef });
     } catch (error) {
         console.error('Error creating VNPAY token pay URL:', error);
-        next(error);
+        return res.status(500).json({ message: error.message || 'Internal Server Error' });
     }
 };
