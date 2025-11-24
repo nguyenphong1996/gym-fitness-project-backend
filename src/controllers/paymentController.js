@@ -133,3 +133,34 @@ exports.createVnpayTokenPayUrl = async (req, res, next) => {
         return res.status(500).json({ message: error.message || 'Internal Server Error' });
     }
 };
+
+/**
+ * Lấy trạng thái giao dịch theo txnRef (phục vụ app polling khi dùng SDK)
+ */
+exports.getTransactionStatus = async (req, res, next) => {
+    try {
+        const { txnRef } = req.params;
+        if (!txnRef) {
+            return res.status(400).json({ message: 'txnRef is required' });
+        }
+        const tx = await PaymentTransaction.findOne({ txnRef });
+        if (!tx) {
+            return res.status(404).json({ message: 'Transaction not found' });
+        }
+        return res.status(200).json({
+            txnRef: tx.txnRef,
+            status: tx.status,
+            responseCode: tx.responseCode,
+            transactionStatus: tx.transactionStatus,
+            amount: tx.amount,
+            paidAt: tx.paidAt,
+            channel: tx.channel,
+            bankCode: tx.bankCode,
+            cardType: tx.cardType,
+            token: tx.token,
+        });
+    } catch (error) {
+        console.error('Error getting transaction status:', error);
+        next(error);
+    }
+};
