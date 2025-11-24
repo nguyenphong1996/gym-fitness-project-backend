@@ -338,7 +338,6 @@ exports.updateTransactionStatus = async ({ txnRef, rspCode, transactionStatus, p
     await tx.save();
 
     // Lưu token nếu có trong params và giao dịch thành công
-    const isSuccess = rspCode === '00' && transactionStatus === '00';
     if (isSuccess) {
         await savePaymentTokenIfAny(params);
     }
