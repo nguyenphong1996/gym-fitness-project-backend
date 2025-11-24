@@ -24,7 +24,8 @@ exports.vnpayReturn = async (req, res, next) => {
 
         // Nếu client mong muốn JSON (mobile app), trả JSON
         const acceptsJson = (req.headers.accept || '').includes('application/json');
-        if (acceptsJson) {
+        const isApp = req.query.platform === 'app';
+        if (acceptsJson || isApp) {
             return res.status(200).json(result);
         }
 
