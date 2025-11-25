@@ -67,7 +67,7 @@ const getClientIp = (req) => {
         '0.0.0.0';
 };
 
-exports.createPaymentUrl = (req, amount, orderInfo, bankCode) => {
+exports.createPaymentUrl = (req, amount, orderInfo, bankCode, cardType) => {
     process.env.TZ = 'Asia/Ho_Chi_Minh';
     
     let date = new Date();
@@ -102,6 +102,9 @@ exports.createPaymentUrl = (req, amount, orderInfo, bankCode) => {
     vnp_Params['vnp_CreateDate'] = createDate;
     if(bankCode !== null && bankCode !== ''){
         vnp_Params['vnp_BankCode'] = bankCode;
+    }
+    if(cardType){
+        vnp_Params['vnp_CardType'] = cardType; // 01 nội địa, 02 quốc tế
     }
 
     vnp_Params = sortObject(vnp_Params);

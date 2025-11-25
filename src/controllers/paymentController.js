@@ -5,12 +5,12 @@ const PaymentToken = require('../models/PaymentToken');
 
 exports.createPaymentUrl = async (req, res, next) => {
     try {
-        const { amount, orderInfo, bankCode } = req.body; // Frontend will send amount, orderInfo, bankCode
+        const { amount, orderInfo, bankCode, cardType } = req.body; // Frontend will send amount, orderInfo, bankCode
         if (!amount) {
             return res.status(400).json({ message: 'Amount is required' });
         }
 
-        const vnpUrl = vnpayService.createPaymentUrl(req, amount, orderInfo, bankCode);
+        const vnpUrl = vnpayService.createPaymentUrl(req, amount, orderInfo, bankCode, cardType);
         res.status(200).json({ vnpUrl });
     } catch (error) {
         console.error('Error creating VNPAY URL:', error);
@@ -29,6 +29,43 @@ exports.vnpayReturn = async (req, res, next) => {
         if (acceptsJson || isApp) {
             return res.status(200).json(result);
         }
+
+        // Trả HTML đơn giản khi người dùng mở trên trình duyệt/WebView
+        const isSuccess = result.code === "00";
+        const html = `
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Kết quả thanh toán</title>
+  <style>
+    body { margin: 0; font-family: Arial, sans-serif; background: #f5f7f6; color: #10241A; display: flex; align-items: center; justify-content: center; min-height: 100vh; }
+    .card { background: #fff; padding: 24px; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.08); max-width: 360px; width: 90%; text-align: center; }
+    .icon { font-size: 48px; margin-bottom: 12px; }
+    .success { color: #1F8E4A; }
+    .fail { color: #BA1A1A; }
+    .btn { margin-top: 16px; display: inline-block; padding: 12px 16px; background: #1F8E4A; color: #fff; border-radius: 8px; text-decoration: none; font-weight: 600; }
+    .btn:hover { opacity: 0.9; }
+    .details { margin-top: 12px; font-size: 14px; color: #47614F; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="icon ${isSuccess ? 'success' : 'fail'}">${isSuccess ? '✔' : '✖'}</div>
+    <h2>${isSuccess ? 'Thanh toán thành công' : 'Thanh toán thất bại'}</h2>
+    <div class="details">
+      <div>Mã đơn: ${result.orderId || ''}</div>
+      <div>Số tiền: ${result.amount ? result.amount + ' VND' : ''}</div>
+      <div>Trạng thái: ${result.message || ''}</div>
+    </div>
+    <a class="btn" href="${frontendUrl}">Về trang chủ</a>
+  </div>
+</body>
+</html>
+        `;
+
+        return res.status(200).send(html);
 
         const queryParams = new URLSearchParams({
             orderId: result.orderId,

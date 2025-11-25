@@ -40,6 +40,10 @@ const paymentController = require('../controllers/paymentController');
  *                 type: string
  *                 description: "Mã ngân hàng. Nếu không có, VNPAY sẽ hiển thị danh sách ngân hàng để người dùng chọn."
  *                 example: "NCB"
+ *               cardType:
+ *                 type: string
+ *                 description: "Loại thẻ: 01 (nội địa), 02 (quốc tế)."
+ *                 example: "02"
  *     responses:
  *       200:
  *         description: Trả về URL thanh toán VNPAY.
@@ -172,6 +176,7 @@ router.get('/vnpay-ipn', paymentController.vnpayIpn);
  *               amount: { type: number, description: "Bắt buộc nếu mode=pay_and_create" }
  *               orderInfo: { type: string }
  *               cardType: { type: string, example: "01" }
+ *                 description: "01 (nội địa), 02 (quốc tế)"
  *               bankCode: { type: string }
  *               mode: { type: string, enum: ["token_create", "pay_and_create"], default: "pay_and_create" }
  *               packageId: { type: string }
@@ -198,7 +203,7 @@ router.post('/token/init', paymentController.createVnpayTokenUrl);
  *               amount: { type: number }
  *               orderInfo: { type: string }
  *               token: { type: string }
- *               cardType: { type: string, example: "01" }
+ *               cardType: { type: string, example: "01", description: "01 (nội địa), 02 (quốc tế)" }
  *               bankCode: { type: string }
  *               packageId: { type: string }
  *     responses:
