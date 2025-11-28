@@ -2,6 +2,7 @@ const vnpayService = require('../services/vnpayService');
 const Enrollment = require('../models/Enrollment'); // Assuming Enrollment model is relevant
 const PaymentTransaction = require('../models/PaymentTransaction');
 const PaymentToken = require('../models/PaymentToken');
+const { logInfo, logError } = require('../utils/logger');
 
 exports.createPaymentUrl = async (req, res, next) => {
     try {
@@ -114,6 +115,14 @@ exports.createVnpayTokenUrl = async (req, res, next) => {
         }
 
         const command = mode === 'token_create' ? 'token_create' : 'pay_and_create';
+        logInfo('paymentController.createVnpayTokenUrl', 'Tạo URL VNPAY token init', {
+            userId,
+            packageId,
+            amount,
+            command,
+            cardType,
+            bankCode,
+        });
         const { vnpUrl, txnRef } = await vnpayService.createTokenUrl(req, {
             amount,
             orderInfo,
@@ -128,9 +137,11 @@ exports.createVnpayTokenUrl = async (req, res, next) => {
             await PaymentTransaction.updateOne({ txnRef }, { $set: { packageId } });
         }
 
+        logInfo('paymentController.createVnpayTokenUrl', 'Tạo URL thành công', { txnRef, command });
         return res.status(200).json({ vnpUrl, txnRef });
     } catch (error) {
         console.error('Error creating VNPAY token URL:', error);
+        logError('paymentController.createVnpayTokenUrl', 'Lỗi tạo URL VNPAY token init', error);
         return res.status(500).json({ message: error.message || 'Internal Server Error' });
     }
 };
@@ -151,6 +162,15 @@ exports.createVnpayTokenPayUrl = async (req, res, next) => {
             return res.status(400).json({ message: 'userId is required' });
         }
 
+        logInfo('paymentController.createVnpayTokenPayUrl', 'Tạo URL VNPAY token_pay', {
+            userId,
+            amount,
+            packageId,
+            cardType,
+            bankCode,
+            hasToken: !!token,
+        });
+
         const { vnpUrl, txnRef } = await vnpayService.createTokenUrl(req, {
             amount,
             orderInfo,
@@ -165,9 +185,11 @@ exports.createVnpayTokenPayUrl = async (req, res, next) => {
             await PaymentTransaction.updateOne({ txnRef }, { $set: { packageId } });
         }
 
+        logInfo('paymentController.createVnpayTokenPayUrl', 'Tạo URL token_pay thành công', { txnRef });
         return res.status(200).json({ vnpUrl, txnRef });
     } catch (error) {
         console.error('Error creating VNPAY token pay URL:', error);
+        logError('paymentController.createVnpayTokenPayUrl', 'Lỗi tạo URL token_pay', error);
         return res.status(500).json({ message: error.message || 'Internal Server Error' });
     }
 };

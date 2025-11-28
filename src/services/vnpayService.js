@@ -4,6 +4,7 @@ const crypto = require("crypto");
 const axios = require('axios');
 const PaymentTransaction = require('../models/PaymentTransaction');
 const PaymentToken = require('../models/PaymentToken');
+const { logInfo, logError } = require('../utils/logger');
 const appendPlatformParam = (url) => {
     if (!url) return url;
     const hasQuery = url.includes('?');
@@ -166,9 +167,11 @@ exports.createTokenUrl = async (req, {
     const targetUrl = command === 'token_create' ? tokenCreateUrl : (command === 'token_pay' ? tokenPayUrl : payAndCreateUrl);
 
     if (!tmnCode || !secretKey) {
+        logError('vnpayService.createTokenUrl', 'Thiếu cấu hình VNPAY: VNP_TMNCODE hoặc VNP_HASHSECRET');
         throw new Error('Thiếu cấu hình VNPAY: VNP_TMNCODE hoặc VNP_HASHSECRET');
     }
     if (!baseReturnUrl) {
+        logError('vnpayService.createTokenUrl', 'Thiếu cấu hình VNP_RETURNURL/VNP_TOKEN_RETURNURL');
         throw new Error('Thiếu cấu hình VNP_RETURNURL/VNP_TOKEN_RETURNURL');
     }
 
@@ -212,6 +215,15 @@ exports.createTokenUrl = async (req, {
     sorted['vnp_secure_hash'] = secureHash;
 
     const url = targetUrl + '?' + querystring.stringify(sorted, { encode: false });
+    logInfo('vnpayService.createTokenUrl', 'Đã ký URL VNPAY', {
+        command,
+        txnRef,
+        targetUrl,
+        hasToken: !!token,
+        amount,
+        cardType,
+        bankCode,
+    });
 
     // Lưu log pending (không làm hỏng flow nếu DB lỗi)
     try {
