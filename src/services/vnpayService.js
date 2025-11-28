@@ -58,7 +58,11 @@ const withSignedParams = (params, secretKey) => {
     return { sorted, secureHash: signed };
 };
 
-const buildTxnRef = () => moment().format('DDHHmmss');
+const buildTxnRef = () => {
+    const timePart = moment().format('YYYYMMDDHHmmss');
+    const randomPart = Math.floor(1000 + Math.random() * 9000); // 4 chữ số ngẫu nhiên
+    return `${timePart}${randomPart}`;
+};
 
 const getClientIp = (req) => {
     return req.headers['x-forwarded-for'] ||
@@ -73,7 +77,7 @@ exports.createPaymentUrl = (req, amount, orderInfo, bankCode, cardType) => {
     
     let date = new Date();
     let createDate = moment(date).format('YYYYMMDDHHmmss');
-    let orderId = moment(date).format('DDHHmmss');
+    let orderId = buildTxnRef();
 
     let ipAddr = req.headers['x-forwarded-for'] ||
         req.connection.remoteAddress ||
@@ -160,7 +164,7 @@ exports.createTokenUrl = async (req, {
     const tmnCode = process.env.VNP_TMNCODE;
     const secretKey = process.env.VNP_HASHSECRET;
     const vnpVersion = process.env.VNP_VERSION || '2.1.0';
-    const baseReturnUrl = appendPlatformParam(process.env.VNP_RETURNURL || process.env.VNP_TOKEN_RETURNURL || '');
+    const baseReturnUrl = appendPlatformParam(process.env.VNP_TOKEN_RETURNURL || process.env.VNP_RETURNURL || '');
     const tokenCreateUrl = process.env.VNP_TOKEN_CREATE_URL || 'https://sandbox.vnpayment.vn/token_ui/create-token.html';
     const payAndCreateUrl = process.env.VNP_TOKEN_PAY_CREATE_URL || 'https://sandbox.vnpayment.vn/token_ui/pay-create-token.html';
     const tokenPayUrl = process.env.VNP_TOKEN_PAY_URL || 'https://sandbox.vnpayment.vn/token_ui/payment-token.html';
