@@ -175,8 +175,7 @@ router.get('/vnpay-ipn', paymentController.vnpayIpn);
  *               userId: { type: string }
  *               amount: { type: number, description: "Bắt buộc nếu mode=pay_and_create" }
  *               orderInfo: { type: string }
- *               cardType: { type: string, example: "01" }
- *                 description: "01 (nội địa), 02 (quốc tế)"
+ *               cardType: { type: string, example: "01", description: "01 (nội địa), 02 (quốc tế)" }
  *               bankCode: { type: string }
  *               mode: { type: string, enum: ["token_create", "pay_and_create"], default: "pay_and_create" }
  *               packageId: { type: string }
