@@ -22,7 +22,6 @@ exports.createPaymentUrl = async (req, res, next) => {
 exports.vnpayReturn = async (req, res, next) => {
     try {
         const result = await vnpayService.vnpayReturn(req);
-        const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
 
         // Nếu client mong muốn JSON (mobile app), trả JSON
         const acceptsJson = (req.headers.accept || '').includes('application/json');
@@ -60,31 +59,22 @@ exports.vnpayReturn = async (req, res, next) => {
       <div>Số tiền: ${result.amount ? result.amount + ' VND' : ''}</div>
       <div>Trạng thái: ${result.message || ''}</div>
     </div>
-    <a class="btn" href="${frontendUrl}">Về trang chủ</a>
+    <button class="btn" onclick="handleReturn()">Đóng</button>
   </div>
+  <script>
+    function handleReturn() {
+      if (document.referrer) {
+        window.location.href = document.referrer;
+        return;
+      }
+      window.close();
+    }
+  </script>
 </body>
 </html>
         `;
 
         return res.status(200).send(html);
-
-        const queryParams = new URLSearchParams({
-            orderId: result.orderId,
-            status: result.code,
-            message: result.message
-        }).toString();
-
-        // TODO: Implement actual database update logic here based on result.orderId and result.code
-        if (result.code === "00") {
-            // Payment success: Update enrollment status in DB
-            console.log(`Payment successful for Order ID: ${result.orderId}, Amount: ${result.amount}`);
-        } else {
-            // Payment failed: Log or update enrollment status as failed
-            console.log(`Payment failed for Order ID: ${result.orderId}, Code: ${result.code}`);
-        }
-
-        // Redirect to a dedicated frontend page to show payment status
-        res.redirect(`${frontendUrl}/payment-status?${queryParams}`);
 
     } catch (error) {
         console.error('Error handling VNPAY return:', error);

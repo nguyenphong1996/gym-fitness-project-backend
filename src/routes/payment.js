@@ -78,7 +78,7 @@ router.post('/create-payment-url', paymentController.createPaymentUrl);
  *     summary: Xử lý kết quả VNPAY trả về
  *     description: |
  *       Endpoint để VNPAY chuyển hướng người dùng trở lại sau khi hoàn tất thanh toán.
- *       API sẽ xác thực chữ ký, cập nhật trạng thái đơn hàng và chuyển hướng người dùng về trang thông báo kết quả trên frontend.
+ *       API sẽ xác thực chữ ký, cập nhật trạng thái đơn hàng và trả kết quả JSON hoặc trang HTML thông báo trạng thái.
  *       **Lưu ý:** Người dùng không gọi trực tiếp API này.
  *     tags: [Payment]
  *     parameters:
@@ -103,13 +103,8 @@ router.post('/create-payment-url', paymentController.createPaymentUrl);
  *         schema: { type: string }
  *         description: Chữ ký bảo mật để xác thực.
  *     responses:
- *       302:
- *         description: Chuyển hướng về trang frontend với kết quả thanh toán.
- *         headers:
- *           Location:
- *             schema:
- *               type: string
- *               example: "http://localhost:8081/payment-status?orderId=12345&status=00&message=Success"
+ *       200:
+ *         description: Kết quả thanh toán (JSON hoặc trang HTML hiển thị trạng thái).
  *       500:
  *         description: Lỗi máy chủ hoặc xác thực chữ ký thất bại.
  */
