@@ -2,6 +2,21 @@ const PtBooking = require('../models/PtBooking');
 const { normalizeDate } = require('../utils/ptSlots');
 const { logError, logSuccess } = require('../utils/logger');
 
+const formatBookingResponse = (booking) => ({
+  id: booking._id,
+  staffId: booking.staffId,
+  customerId: booking.customerId,
+  slotKey: booking.slotKey,
+  startTime: booking.startTime,
+  endTime: booking.endTime,
+  status: booking.status,
+  notes: booking.notes || null,
+  cancelledAt: booking.cancelledAt || null,
+  cancelReason: booking.cancelReason || null
+});
+
+const ACTIVE_STATUSES = ['pending_staff', 'confirmed'];
+
 exports.getStaffBookings = async (req, res) => {
   const context = 'staffBookingController.getStaffBookings';
   try {
@@ -56,7 +71,7 @@ exports.getStaffBookings = async (req, res) => {
     }
 
     if (status === 'upcoming') {
-      filter.status = 'confirmed';
+      filter.status = { $in: ACTIVE_STATUSES };
       filter.startTime = filter.startTime || {};
       filter.startTime.$gte = filter.startTime.$gte || now;
     } else if (status === 'history') {
@@ -101,6 +116,98 @@ exports.getStaffBookings = async (req, res) => {
     return res.status(500).json({
       error: 'server_error',
       message: 'Failed to fetch staff bookings'
+    });
+  }
+};
+
+exports.acceptStaffBooking = async (req, res) => {
+  const context = 'staffBookingController.acceptStaffBooking';
+  try {
+    const { bookingId } = req.params;
+    if (!bookingId || !bookingId.match(/^[0-9a-f]{24}$/)) {
+      return res.status(400).json({
+        error: 'invalid_booking_id',
+        message: 'Invalid booking id'
+      });
+    }
+
+    const booking = await PtBooking.findById(bookingId);
+    if (!booking || booking.staffId.toString() !== req.user.id) {
+      return res.status(404).json({
+        error: 'booking_not_found',
+        message: 'Booking not found'
+      });
+    }
+
+    if (booking.status !== 'pending_staff') {
+      return res.status(400).json({
+        error: 'invalid_status',
+        message: 'Only pending bookings can be accepted'
+      });
+    }
+
+    booking.status = 'confirmed';
+    await booking.save();
+
+    logSuccess(context, 'Staff accepted booking', { bookingId, staffId: req.user.id });
+    return res.json({
+      success: true,
+      message: 'Booking accepted',
+      booking: formatBookingResponse(booking)
+    });
+  } catch (error) {
+    logError(context, 'Failed to accept booking', error);
+    return res.status(500).json({
+      error: 'server_error',
+      message: 'Failed to accept booking'
+    });
+  }
+};
+
+exports.declineStaffBooking = async (req, res) => {
+  const context = 'staffBookingController.declineStaffBooking';
+  try {
+    const { bookingId } = req.params;
+    const reason = req.body?.reason;
+    if (!bookingId || !bookingId.match(/^[0-9a-f]{24}$/)) {
+      return res.status(400).json({
+        error: 'invalid_booking_id',
+        message: 'Invalid booking id'
+      });
+    }
+
+    const booking = await PtBooking.findById(bookingId);
+    if (!booking || booking.staffId.toString() !== req.user.id) {
+      return res.status(404).json({
+        error: 'booking_not_found',
+        message: 'Booking not found'
+      });
+    }
+
+    if (booking.status !== 'pending_staff') {
+      return res.status(400).json({
+        error: 'invalid_status',
+        message: 'Only pending bookings can be declined'
+      });
+    }
+
+    booking.status = 'declined';
+    booking.cancelledAt = new Date();
+    booking.cancelReason = reason ? String(reason).slice(0, 200) : undefined;
+    booking.cancelledBy = req.user.id;
+    await booking.save();
+
+    logSuccess(context, 'Staff declined booking', { bookingId, staffId: req.user.id });
+    return res.json({
+      success: true,
+      message: 'Booking declined',
+      booking: formatBookingResponse(booking)
+    });
+  } catch (error) {
+    logError(context, 'Failed to decline booking', error);
+    return res.status(500).json({
+      error: 'server_error',
+      message: 'Failed to decline booking'
     });
   }
 };

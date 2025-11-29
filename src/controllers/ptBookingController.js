@@ -17,6 +17,8 @@ const ACTIVE_CLASS_STATUSES = [
   'waiting_checkout'
 ];
 
+const BOOKING_STATUS_ACTIVE = ['pending_staff', 'confirmed'];
+
 function formatBookingResponse(booking, options = {}) {
   const { includeStaff = false, includeCustomer = false } = options;
   const payload = {
@@ -114,9 +116,9 @@ exports.getAvailability = async (req, res) => {
     const [bookings, blockingClasses] = await Promise.all([
       PtBooking.find({
         staffId,
-        status: 'confirmed',
+        status: { $in: BOOKING_STATUS_ACTIVE },
         startTime: { $gte: dayStart, $lt: dayEnd }
-      }).select('_id startTime endTime customerId slotKey'),
+      }).select('_id startTime endTime customerId slotKey status'),
       fetchBlockingClasses(staffId, dayStart, dayEnd)
     ]);
 
@@ -225,13 +227,13 @@ exports.createBooking = async (req, res) => {
     const [staffConflict, customerConflict, classConflict] = await Promise.all([
       PtBooking.findOne({
         staffId,
-        status: 'confirmed',
+        status: { $in: BOOKING_STATUS_ACTIVE },
         startTime: { $lt: slot.endTime },
         endTime: { $gt: slot.startTime }
       }),
       PtBooking.findOne({
         customerId: req.user.id,
-        status: 'confirmed',
+        status: { $in: BOOKING_STATUS_ACTIVE },
         startTime: { $lt: slot.endTime },
         endTime: { $gt: slot.startTime }
       }),
@@ -275,7 +277,8 @@ exports.createBooking = async (req, res) => {
       slotKey,
       startTime: slot.startTime,
       endTime: slot.endTime,
-      notes: note ? String(note).trim().slice(0, 500) : undefined
+      notes: note ? String(note).trim().slice(0, 500) : undefined,
+      status: 'pending_staff'
     });
 
     logSuccess(context, 'Customer booked PT slot', {
@@ -312,7 +315,7 @@ exports.getCustomerBookings = async (req, res) => {
     const now = new Date();
 
     if (status === 'upcoming') {
-      filter.status = 'confirmed';
+      filter.status = { $in: BOOKING_STATUS_ACTIVE };
       filter.startTime = { $gte: now };
     } else if (status === 'history') {
       filter.endTime = { $lt: now };
@@ -383,10 +386,10 @@ exports.cancelBooking = async (req, res) => {
       });
     }
 
-    if (booking.status !== 'confirmed') {
+    if (!['confirmed', 'pending_staff'].includes(booking.status)) {
       return res.status(400).json({
         error: 'cannot_cancel',
-        message: 'Only confirmed bookings can be cancelled'
+        message: 'Only pending or confirmed bookings can be cancelled'
       });
     }
 

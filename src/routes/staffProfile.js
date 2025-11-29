@@ -14,7 +14,11 @@ const {
   requestSkillUpdate,
   updateAvatar
 } = require('../controllers/staffProfileController');
-const { getStaffBookings } = require('../controllers/staffBookingController');
+const {
+  getStaffBookings,
+  acceptStaffBooking,
+  declineStaffBooking
+} = require('../controllers/staffBookingController');
 
 const uploadDir = process.env.UPLOAD_AVATAR_DIR || path.join(os.tmpdir(), 'gymxfit-avatars');
 if (!fs.existsSync(uploadDir)) {
@@ -363,6 +367,22 @@ router.put('/profile', authMiddleware, staffMiddleware, updateProfile);
  *                 message: { type: string }
  */
 router.get('/bookings', authMiddleware, staffMiddleware, getStaffBookings);
+
+// PT chấp nhận booking đang pending
+router.patch(
+  '/bookings/:bookingId/accept',
+  authMiddleware,
+  staffMiddleware,
+  acceptStaffBooking
+);
+
+// PT từ chối booking đang pending
+router.patch(
+  '/bookings/:bookingId/decline',
+  authMiddleware,
+  staffMiddleware,
+  declineStaffBooking
+);
 
 /**
  * @swagger

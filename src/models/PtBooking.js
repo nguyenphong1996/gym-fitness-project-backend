@@ -7,7 +7,12 @@ const PtBookingSchema = new mongoose.Schema({
   slotKey: { type: String, required: true },
   startTime: { type: Date, required: true },
   endTime: { type: Date, required: true },
-  status: { type: String, enum: ['confirmed', 'cancelled', 'completed'], default: 'confirmed', index: true },
+  status: {
+    type: String,
+    enum: ['pending_staff', 'confirmed', 'cancelled', 'completed', 'declined'],
+    default: 'pending_staff',
+    index: true
+  },
   notes: { type: String, trim: true, maxlength: 500 },
   cancelledAt: { type: Date },
   cancelledBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
