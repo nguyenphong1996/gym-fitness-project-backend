@@ -19,6 +19,74 @@ const ACTIVE_CLASS_STATUSES = [
 
 const BOOKING_STATUS_ACTIVE = ['pending_staff', 'confirmed'];
 
+exports.listActiveStaff = async (req, res) => {
+  const context = 'ptBookingController.listActiveStaff';
+  try {
+    const {
+      skill,
+      search,
+      page = 1,
+      limit = 20
+    } = req.query;
+
+    const query = {
+      role: 'staff',
+      isActive: true,
+      skillsApprovedByAdmin: true
+    };
+
+    if (skill) {
+      query.skills = skill;
+    }
+
+    if (search) {
+      const regex = new RegExp(search.trim(), 'i');
+      query.$or = [{ name: regex }, { phone: regex }];
+    }
+
+    const pageNum = Math.max(1, parseInt(page, 10) || 1);
+    const limitNum = Math.max(1, Math.min(50, parseInt(limit, 10) || 20));
+    const skip = (pageNum - 1) * limitNum;
+
+    const [staffList, total] = await Promise.all([
+      User.find(query)
+        .select('_id name phone skills avatar.url')
+        .sort({ name: 1 })
+        .skip(skip)
+        .limit(limitNum),
+      User.countDocuments(query)
+    ]);
+
+    logSuccess(context, 'Fetched active PT list for customer', {
+      total: staffList.length,
+      page: pageNum
+    });
+
+    return res.json({
+      success: true,
+      data: staffList.map((staff) => ({
+        id: staff._id,
+        name: staff.name,
+        phone: staff.phone,
+        skills: staff.skills || [],
+        avatar: staff.avatar?.url || null
+      })),
+      pagination: {
+        total,
+        page: pageNum,
+        limit: limitNum,
+        pages: Math.ceil(total / limitNum) || 1
+      }
+    });
+  } catch (error) {
+    logError(context, 'Failed to list active PT', error);
+    return res.status(500).json({
+      error: 'server_error',
+      message: 'Failed to list PT'
+    });
+  }
+};
+
 function formatBookingResponse(booking, options = {}) {
   const { includeStaff = false, includeCustomer = false } = options;
   const payload = {

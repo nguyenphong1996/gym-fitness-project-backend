@@ -15,6 +15,71 @@ const ptBookingController = require('../controllers/ptBookingController');
 
 /**
  * @swagger
+ * /api/customer/pt/staff:
+ *   get:
+ *     summary: Danh sách PT đang hoạt động (cho customer)
+ *     tags: [PT Booking]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: skill
+ *         schema:
+ *           type: string
+ *           enum: [workout, cardio, stretching, nutrition, yoga, other]
+ *         description: Lọc theo kỹ năng PT
+ *       - in: query
+ *         name: search
+ *         schema:
+ *           type: string
+ *         description: Tìm theo tên hoặc số điện thoại
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *         description: Trang hiện tại (mặc định 1)
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *         description: Số bản ghi mỗi trang (mặc định 20, tối đa 50)
+ *     responses:
+ *       200:
+ *         description: Danh sách PT
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean }
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       id: { type: string }
+ *                       name: { type: string }
+ *                       phone: { type: string }
+ *                       skills:
+ *                         type: array
+ *                         items: { type: string }
+ *                       avatar: { type: string, nullable: true }
+ *                 pagination:
+ *                   type: object
+ *                   properties:
+ *                     total: { type: integer }
+ *                     page: { type: integer }
+ *                     limit: { type: integer }
+ *                     pages: { type: integer }
+ *       401:
+ *         description: Chưa đăng nhập
+ *       500:
+ *         description: Lỗi hệ thống
+ */
+router.get('/staff', authMiddleware, ptBookingController.listActiveStaff);
+
+/**
+ * @swagger
  * /api/customer/pt/availability:
  *   get:
  *     summary: Xem lịch trống của một PT theo ngày

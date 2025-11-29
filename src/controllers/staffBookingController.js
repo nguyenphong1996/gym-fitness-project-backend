@@ -2,6 +2,8 @@ const PtBooking = require('../models/PtBooking');
 const { normalizeDate } = require('../utils/ptSlots');
 const { logError, logSuccess } = require('../utils/logger');
 
+const ACTIVE_STATUSES = ['pending_staff', 'confirmed'];
+
 const formatBookingResponse = (booking) => ({
   id: booking._id,
   staffId: booking.staffId,
@@ -14,8 +16,6 @@ const formatBookingResponse = (booking) => ({
   cancelledAt: booking.cancelledAt || null,
   cancelReason: booking.cancelReason || null
 });
-
-const ACTIVE_STATUSES = ['pending_staff', 'confirmed'];
 
 exports.getStaffBookings = async (req, res) => {
   const context = 'staffBookingController.getStaffBookings';
