@@ -1,6 +1,7 @@
 const SLOT_DEFINITIONS = [
   { key: '08:00-10:00', startHour: 8, endHour: 10 },
   { key: '10:00-12:00', startHour: 10, endHour: 12 },
+  { key: '12:00-14:00', startHour: 12, endHour: 14 },
   { key: '14:00-16:00', startHour: 14, endHour: 16 },
   { key: '16:00-18:00', startHour: 16, endHour: 18 },
   { key: '18:00-20:00', startHour: 18, endHour: 20 }
