@@ -186,7 +186,7 @@ exports.getAvailability = async (req, res) => {
     if (!staff) {
       return res.status(404).json({
         error: 'staff_not_found',
-        message: 'Staff not found or inactive'
+        message: `Staff not found or inactive. ID: ${staffId}`
       });
     }
 
@@ -211,6 +211,13 @@ exports.getAvailability = async (req, res) => {
       fetchBlockingClasses(staffId, dayStart, dayEnd),
       StaffAvailability.findOne({ staffId, date: normalizedDate })
     ]);
+
+    logDebug(context, 'Availability check', {
+      staffId,
+      date: normalizedDate,
+      hasAvailabilityRecord: !!staffAvailability,
+      slots: staffAvailability?.slots
+    });
 
     const availableSlotKeys = staffAvailability ? new Set(staffAvailability.slots) : new Set();
 
