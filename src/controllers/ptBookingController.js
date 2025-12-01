@@ -1,6 +1,7 @@
 const PtBooking = require('../models/PtBooking');
 const User = require('../models/User');
 const Class = require('../models/Class');
+const StaffAvailability = require('../models/StaffAvailability');
 const {
   buildSlotsForDate,
   findSlotByKey,
@@ -36,7 +37,13 @@ exports.listActiveStaff = async (req, res) => {
     };
 
     if (skill) {
-      query.skills = skill;
+      const skillsArray = Array.isArray(skill)
+        ? skill
+        : String(skill).split(',').map((s) => s.trim()).filter(Boolean);
+
+      if (skillsArray.length > 0) {
+        query.skills = { $all: skillsArray };
+      }
     }
 
     if (search) {
@@ -181,16 +188,27 @@ exports.getAvailability = async (req, res) => {
     const dayEnd = new Date(normalizedDate);
     dayEnd.setUTCDate(dayEnd.getUTCDate() + 1);
 
-    const [bookings, blockingClasses] = await Promise.all([
+    const [bookings, blockingClasses, staffAvailability] = await Promise.all([
       PtBooking.find({
         staffId,
         status: { $in: BOOKING_STATUS_ACTIVE },
         startTime: { $gte: dayStart, $lt: dayEnd }
       }).select('_id startTime endTime customerId slotKey status'),
-      fetchBlockingClasses(staffId, dayStart, dayEnd)
+      fetchBlockingClasses(staffId, dayStart, dayEnd),
+      StaffAvailability.findOne({ staffId, date: normalizedDate })
     ]);
 
+    const availableSlotKeys = staffAvailability ? new Set(staffAvailability.slots) : new Set();
+
     const responseSlots = slots.map((slot) => {
+      // If PT has not opened this slot, mark as unavailable
+      if (!availableSlotKeys.has(slot.key)) {
+        return {
+          ...slot,
+          status: 'unavailable'
+        };
+      }
+
       const existingBooking = bookings.find((booking) =>
         overlaps(slot.startTime, slot.endTime, booking.startTime, booking.endTime)
       );
@@ -234,7 +252,8 @@ exports.getAvailability = async (req, res) => {
       staff: {
         id: staff._id,
         name: staff.name,
-        phone: staff.phone
+        phone: staff.phone,
+        avatar: staff.avatar?.url || null
       },
       date: normalizedDate.toISOString(),
       slots: responseSlots
@@ -289,6 +308,15 @@ exports.createBooking = async (req, res) => {
       return res.status(404).json({
         error: 'staff_not_found',
         message: 'Staff not found or inactive'
+      });
+    }
+
+    // Check if staff has opened this slot
+    const staffAvailability = await StaffAvailability.findOne({ staffId, date: normalizedDate });
+    if (!staffAvailability || !staffAvailability.slots.includes(slotKey)) {
+      return res.status(400).json({
+        error: 'slot_unavailable',
+        message: 'Staff is not working during this slot'
       });
     }
 
