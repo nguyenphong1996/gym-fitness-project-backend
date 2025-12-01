@@ -129,11 +129,22 @@ function formatBookingResponse(booking, options = {}) {
 
 async function ensureStaffExists(staffId) {
   if (!staffId || !staffId.match(/^[0-9a-f]{24}$/)) {
+    logWarning('ensureStaffExists', `Invalid staffId format: ${staffId}`);
     return null;
   }
 
   const staff = await User.findOne({ _id: staffId, role: 'staff', isActive: true });
   if (!staff) {
+    // Check if staff exists but is inactive or wrong role
+    const anyStaff = await User.findById(staffId);
+    if (anyStaff) {
+      logWarning('ensureStaffExists', `Staff found but invalid: ${staffId}`, {
+        role: anyStaff.role,
+        isActive: anyStaff.isActive
+      });
+    } else {
+      logWarning('ensureStaffExists', `Staff not found in DB: ${staffId}`);
+    }
     return null;
   }
   return staff;
@@ -152,6 +163,9 @@ exports.getAvailability = async (req, res) => {
   const context = 'ptBookingController.getAvailability';
   try {
     const { staffId, date } = req.query;
+
+    // Log request for debugging
+    logDebug(context, 'Request availability', { staffId, date, userId: req.user.id });
 
     if (!staffId) {
       return res.status(400).json({
