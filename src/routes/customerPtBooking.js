@@ -26,8 +26,8 @@ const ptBookingController = require('../controllers/ptBookingController');
  *         name: skill
  *         schema:
  *           type: string
- *           enum: [workout, cardio, stretching, nutrition, yoga, other]
- *         description: Lọc theo kỹ năng PT
+ *           example: "yoga,nutrition"
+ *         description: Lọc theo kỹ năng PT (có thể nhập nhiều, cách nhau dấu phẩy)
  *       - in: query
  *         name: search
  *         schema:
@@ -117,6 +117,7 @@ router.get('/staff', authMiddleware, ptBookingController.listActiveStaff);
  *                     id: { type: string }
  *                     name: { type: string }
  *                     phone: { type: string }
+ *                     avatar: { type: string, nullable: true }
  *                 date:
  *                   type: string
  *                   format: date-time
@@ -136,7 +137,7 @@ router.get('/staff', authMiddleware, ptBookingController.listActiveStaff);
  *                         format: date-time
  *                       status:
  *                         type: string
- *                         enum: [available, booked, booked_by_you, blocked]
+ *                         enum: [available, booked, booked_by_you, blocked, unavailable]
  *                       bookingId:
  *                         type: string
  *                         nullable: true
@@ -252,13 +253,13 @@ router.get('/availability', authMiddleware, customerMiddleware, ptBookingControl
  *                     endTime: { type: string, format: date-time }
  *                     status: { type: string, example: "confirmed" }
  *       400:
- *         description: Thiếu dữ liệu, slot key sai, hoặc ca đã ở quá khứ
+ *         description: Thiếu dữ liệu, slot key sai, ca đã ở quá khứ hoặc PT không làm việc
  *         content:
  *           application/json:
  *             schema:
  *               type: object
  *               properties:
- *                 error: { type: string, example: "invalid_slot" }
+ *                 error: { type: string, example: "slot_unavailable" }
  *                 message: { type: string }
  *       401:
  *         description: Chưa đăng nhập
