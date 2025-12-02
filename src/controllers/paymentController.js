@@ -27,7 +27,16 @@ exports.vnpayReturn = async (req, res, next) => {
         const acceptsJson = (req.headers.accept || '').includes('application/json');
         const isApp = req.query.platform === 'app';
         if (acceptsJson || isApp) {
-            return res.status(200).json(result);
+            // Thay vì trả JSON, redirect về app với custom scheme
+            // Loại bỏ các giá trị undefined/null để query string sạch hơn
+            const cleanResult = {};
+            Object.keys(result).forEach(key => {
+                if (result[key] !== undefined && result[key] !== null) {
+                    cleanResult[key] = result[key];
+                }
+            });
+            const queryString = new URLSearchParams(cleanResult).toString();
+            return res.redirect(`gymxfit://payment-result?${queryString}`);
         }
 
         // Trả HTML đơn giản khi người dùng mở trên trình duyệt/WebView
