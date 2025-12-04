@@ -30,6 +30,7 @@ var enrollmentRouter = require('./src/routes/enrollment');
 var customerVideoFavoritesRouter = require('./src/routes/customerVideoFavorites');
 var staffClassAttendanceRouter = require('./src/routes/staffClassAttendance');
 var paymentRouter = require('./src/routes/payment'); // Added for VNPAY
+var packageRouter = require('./src/routes/package'); // Added for Membership Packages
 
 const mongoose = require('mongoose');
 const {
@@ -142,6 +143,7 @@ app.use('/api/customer/videos', customerVideoFavoritesRouter);
 app.use('/api/customer/pt', customerPtBookingRouter);
 app.use('/api/customer', enrollmentRouter);
 app.use('/api/v1/payment', paymentRouter); // Added for VNPAY
+app.use('/api/admin/packages', packageRouter); // Added for Membership Packages
 
 
 /**

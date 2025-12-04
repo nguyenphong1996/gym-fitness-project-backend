@@ -73,6 +73,17 @@ const options = {
             updatedAt: {
               type: 'string',
               format: 'date-time'
+            },
+            membership: {
+              type: 'object',
+              properties: {
+                packageId: { type: 'string' },
+                startDate: { type: 'string', format: 'date-time' },
+                endDate: { type: 'string', format: 'date-time' },
+                remainingSessions: { type: 'number' },
+                status: { type: 'string', enum: ['active', 'expired', 'none'] },
+                lastRenewalDate: { type: 'string', format: 'date-time' }
+              }
             }
           }
         },
@@ -161,6 +172,17 @@ const options = {
             updatedAt: {
               type: 'string',
               format: 'date-time'
+            },
+            membership: {
+              type: 'object',
+              properties: {
+                packageId: { type: 'string' },
+                startDate: { type: 'string', format: 'date-time' },
+                endDate: { type: 'string', format: 'date-time' },
+                remainingSessions: { type: 'number' },
+                status: { type: 'string', enum: ['active', 'expired', 'none'] },
+                lastRenewalDate: { type: 'string', format: 'date-time' }
+              }
             }
           }
         }

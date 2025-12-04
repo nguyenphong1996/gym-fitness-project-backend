@@ -53,6 +53,16 @@ const UserSchema = new mongoose.Schema({
     adminNote: { type: String, trim: true, maxlength: 500 }
   },
 
+  // Membership Info
+  membership: {
+    packageId: { type: mongoose.Schema.Types.ObjectId, ref: 'MembershipPackage' },
+    startDate: { type: Date },
+    endDate: { type: Date },
+    remainingSessions: { type: Number, default: 0 }, // Số buổi PT còn lại
+    status: { type: String, enum: ['active', 'expired', 'none'], default: 'none' },
+    lastRenewalDate: { type: Date }
+  },
+
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now }
 });
