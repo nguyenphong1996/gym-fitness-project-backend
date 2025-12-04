@@ -41,12 +41,20 @@ exports.activateMembership = async (userId, packageId, transactionId) => {
     // Để đơn giản cho Giai đoạn 1: Cộng dồn bất kể trạng thái (khuyến khích mua thêm)
     const newSessions = currentSessions + (pkg.sessionCount || 0);
 
+    // Logic cộng dồn lượt class (quota). Nếu classQuota = null/undefined => không giới hạn.
+    const currentClassCredits = user.membership?.remainingClassCredits ?? 0;
+    const newClassCredits =
+      pkg.classQuota === null || pkg.classQuota === undefined
+        ? null
+        : currentClassCredits + (pkg.classQuota || 0);
+
     // Cập nhật User
     user.membership = {
       packageId: pkg._id,
       startDate: newStartDate,
       endDate: newEndDate,
       remainingSessions: newSessions,
+      remainingClassCredits: newClassCredits,
       status: 'active',
       lastRenewalDate: now
     };
@@ -63,7 +71,8 @@ exports.activateMembership = async (userId, packageId, transactionId) => {
       package: pkg.name,
       transactionId,
       newEndDate,
-      sessions: newSessions
+      sessions: newSessions,
+      classCredits: newClassCredits
     });
 
     return user.membership;

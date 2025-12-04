@@ -38,6 +38,11 @@ const enrollmentSchema = new mongoose.Schema({
     type: Date,
     default: null
   },
+
+  // Pricing info
+  priceCharged: { type: Number, default: 0 }, // VND
+  discountPercent: { type: Number, default: 0, min: 0, max: 100 },
+  usedClassCredit: { type: Boolean, default: false },
   
   // Lý do hủy (nếu có)
   cancellationReason: {

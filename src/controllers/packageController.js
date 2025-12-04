@@ -4,7 +4,16 @@ const { logInfo, logError } = require('../utils/logger');
 exports.createPackage = async (req, res) => {
   const context = 'packageController.createPackage';
   try {
-    const { name, description, type, price, durationDays, sessionCount } = req.body;
+    const {
+      name,
+      description,
+      type,
+      price,
+      durationDays,
+      sessionCount,
+      classQuota,
+      classDiscountPercentAfterQuota
+    } = req.body;
 
     if (!name || !type || price === undefined || !durationDays) {
       return res.status(400).json({
@@ -19,7 +28,9 @@ exports.createPackage = async (req, res) => {
       type,
       price,
       durationDays,
-      sessionCount: sessionCount || 0
+      sessionCount: sessionCount || 0,
+      classQuota: classQuota ?? 0,
+      classDiscountPercentAfterQuota: classDiscountPercentAfterQuota ?? 0
     });
 
     logInfo(context, 'Created new package', { packageId: newPackage._id, name });

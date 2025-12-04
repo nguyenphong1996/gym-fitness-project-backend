@@ -42,6 +42,29 @@ const options = {
             }
           }
         },
+        Facility: {
+          type: 'object',
+          properties: {
+            _id: { type: 'string' },
+            facilityCode: { type: 'string' },
+            name: { type: 'string' },
+            description: { type: 'string' },
+            qrCodeData: { type: 'string' },
+            isActive: { type: 'boolean' }
+          }
+        },
+        FacilityCheckin: {
+          type: 'object',
+          properties: {
+            _id: { type: 'string' },
+            userId: { type: 'string' },
+            facilityId: { type: 'string' },
+            facilityCode: { type: 'string' },
+            checkinTime: { type: 'string', format: 'date-time' },
+            isSuccessful: { type: 'boolean' },
+            failReason: { type: 'string' }
+          }
+        },
         User: {
           type: 'object',
           required: ['_id', 'phone', 'email', 'isVerified'],

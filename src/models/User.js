@@ -59,6 +59,7 @@ const UserSchema = new mongoose.Schema({
     startDate: { type: Date },
     endDate: { type: Date },
     remainingSessions: { type: Number, default: 0 }, // Số buổi PT còn lại
+    remainingClassCredits: { type: Number, default: 0 }, // Số lượt class còn lại (null = không giới hạn)
     status: { type: String, enum: ['active', 'expired', 'none'], default: 'none' },
     lastRenewalDate: { type: Date }
   },
