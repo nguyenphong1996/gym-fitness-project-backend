@@ -1,6 +1,23 @@
+const mongoose = require('mongoose');
 const User = require('../models/User');
 const MembershipPackage = require('../models/MembershipPackage');
 const { logInfo, logError } = require('../utils/logger');
+
+const escapeRegex = (value) => String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+const findPackageByIdOrName = async (packageIdOrName) => {
+  if (!packageIdOrName) return null;
+
+  // Try ObjectId first
+  if (mongoose.Types.ObjectId.isValid(packageIdOrName)) {
+    const byId = await MembershipPackage.findById(packageIdOrName);
+    if (byId) return byId;
+  }
+
+  // Fallback: match by name (case-insensitive exact)
+  const nameRegex = new RegExp(`^${escapeRegex(packageIdOrName)}$`, 'i');
+  return MembershipPackage.findOne({ name: nameRegex });
+};
 
 /**
  * Kích hoạt hoặc gia hạn gói tập cho user
@@ -12,7 +29,7 @@ exports.activateMembership = async (userId, packageId, transactionId) => {
   const context = 'membershipService.activateMembership';
   try {
     const user = await User.findById(userId);
-    const pkg = await MembershipPackage.findById(packageId);
+    const pkg = await findPackageByIdOrName(packageId);
 
     if (!user) throw new Error(`User not found: ${userId}`);
     if (!pkg) throw new Error(`Package not found: ${packageId}`);
