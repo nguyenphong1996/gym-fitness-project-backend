@@ -4,6 +4,14 @@ const Class = require('../models/Class');
 const User = require('../models/User');
 const ClassAttendance = require('../models/ClassAttendance');
 const logger = require('../utils/logger');
+const { CLASS_BASE_PRICE } = require('../config/pricing');
+
+const isMembershipActive = (membership) => {
+  if (!membership) return false;
+  if (membership.status !== 'active') return false;
+  if (membership.endDate && membership.endDate < new Date()) return false;
+  return true;
+};
 
 /**
  * @description Đăng ký lớp học
@@ -61,12 +69,55 @@ exports.enrollClass = async (req, res) => {
       });
     }
 
+    // Lấy user + thông tin membership để tính phí class
+    const user = await User.findById(userId).populate('membership.packageId');
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+
+    const membership = user.membership;
+    const membershipActive = isMembershipActive(membership);
+    const pkg = membershipActive ? membership.packageId : null;
+
+    let priceCharged = CLASS_BASE_PRICE;
+    let discountPercent = 0;
+    let usedClassCredit = false;
+
+    const hasClassAccess = pkg && (pkg.type === 'class_access' || pkg.type === 'combo');
+
+    if (membershipActive && hasClassAccess) {
+      const hasUnlimitedClasses = pkg.classQuota === null || pkg.classQuota === undefined;
+      const remainingCredits = membership.remainingClassCredits ?? 0;
+
+      if (hasUnlimitedClasses) {
+        priceCharged = 0;
+      } else if (remainingCredits > 0) {
+        priceCharged = 0;
+        usedClassCredit = true;
+        membership.remainingClassCredits = remainingCredits - 1;
+      } else {
+        discountPercent = pkg.classDiscountPercentAfterQuota || 0;
+        priceCharged = Math.round(CLASS_BASE_PRICE * (1 - discountPercent / 100));
+      }
+    } else {
+      // Không có quyền class trong gói hoặc membership không active -> thu phí niêm yết
+      priceCharged = CLASS_BASE_PRICE;
+    }
+
+    if (priceCharged < 0) priceCharged = 0;
+
     // Tạo enrollment mới
     const enrollment = new Enrollment({
       userId,
       classId,
       status: 'active',
-      enrolledAt: new Date()
+      enrolledAt: new Date(),
+      priceCharged,
+      discountPercent,
+      usedClassCredit
     });
 
     await enrollment.save();
@@ -75,6 +126,11 @@ exports.enrollClass = async (req, res) => {
     await Class.findByIdAndUpdate(classId, {
       $inc: { currentEnrollment: 1 }
     });
+
+    // Lưu giảm quota class nếu có
+    if (usedClassCredit) {
+      await user.save();
+    }
 
     logger.info(`User ${userId} enrolled in class ${classId}`);
 
@@ -85,7 +141,12 @@ exports.enrollClass = async (req, res) => {
         enrollmentId: enrollment._id,
         classId: enrollment.classId,
         status: enrollment.status,
-        enrolledAt: enrollment.enrolledAt
+        enrolledAt: enrollment.enrolledAt,
+        pricing: {
+          priceCharged,
+          discountPercent,
+          usedClassCredit
+        }
       }
     });
   } catch (error) {

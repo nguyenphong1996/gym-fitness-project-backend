@@ -44,6 +44,10 @@ const paymentController = require('../controllers/paymentController');
  *                 type: string
  *                 description: "Loại thẻ: 01 (nội địa), 02 (quốc tế)."
  *                 example: "02"
+ *               packageId:
+ *                 type: string
+ *                 description: "ID của gói tập (nếu có)."
+ *                 example: "64f0c1c2a1b2c3d4e5f60789"
  *     responses:
  *       200:
  *         description: Trả về URL thanh toán VNPAY.

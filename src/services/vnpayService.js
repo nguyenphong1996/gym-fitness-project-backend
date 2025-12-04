@@ -4,6 +4,7 @@ const crypto = require("crypto");
 const axios = require('axios');
 const PaymentTransaction = require('../models/PaymentTransaction');
 const PaymentToken = require('../models/PaymentToken');
+const membershipService = require('../services/membershipService');
 const { logInfo, logError } = require('../utils/logger');
 const appendPlatformParam = (url) => {
     if (!url) return url;
@@ -359,6 +360,21 @@ exports.updateTransactionStatus = async ({ txnRef, rspCode, transactionStatus, p
     // Lưu token nếu có trong params và giao dịch thành công
     if (isSuccess) {
         await savePaymentTokenIfAny(params);
+
+        // Kích hoạt Membership nếu giao dịch có packageId
+        if (tx.packageId && tx.userId) {
+            try {
+                await membershipService.activateMembership(tx.userId, tx.packageId, tx.txnRef);
+                logInfo('vnpayService.updateTransactionStatus', 'Auto-activated membership', {
+                    userId: tx.userId,
+                    packageId: tx.packageId,
+                    txnRef: tx.txnRef
+                });
+            } catch (actError) {
+                logError('vnpayService.updateTransactionStatus', 'Failed to auto-activate membership', actError);
+                // Không throw error để tránh rollback transaction status (tiền đã trừ rồi)
+            }
+        }
     }
 
     return tx;

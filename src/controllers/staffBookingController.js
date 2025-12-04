@@ -211,3 +211,59 @@ exports.declineStaffBooking = async (req, res) => {
     });
   }
 };
+
+exports.cancelStaffBooking = async (req, res) => {
+  const context = 'staffBookingController.cancelStaffBooking';
+  try {
+    const { bookingId } = req.params;
+    const reason = req.body?.reason;
+    if (!bookingId || !bookingId.match(/^[0-9a-f]{24}$/)) {
+      return res.status(400).json({
+        error: 'invalid_booking_id',
+        message: 'Invalid booking id'
+      });
+    }
+
+    if (!reason) {
+      return res.status(400).json({
+        error: 'missing_reason',
+        message: 'Cancellation reason is required'
+      });
+    }
+
+    const booking = await PtBooking.findById(bookingId);
+    if (!booking || booking.staffId.toString() !== req.user.id) {
+      return res.status(404).json({
+        error: 'booking_not_found',
+        message: 'Booking not found'
+      });
+    }
+
+    // Allow cancelling confirmed or pending bookings
+    if (!['pending_staff', 'confirmed'].includes(booking.status)) {
+      return res.status(400).json({
+        error: 'invalid_status',
+        message: 'Only pending or confirmed bookings can be cancelled'
+      });
+    }
+
+    booking.status = 'cancelled_by_staff';
+    booking.cancelledAt = new Date();
+    booking.cancelReason = String(reason).slice(0, 200);
+    booking.cancelledBy = req.user.id;
+    await booking.save();
+
+    logSuccess(context, 'Staff cancelled booking', { bookingId, staffId: req.user.id });
+    return res.json({
+      success: true,
+      message: 'Booking cancelled',
+      booking: formatBookingResponse(booking)
+    });
+  } catch (error) {
+    logError(context, 'Failed to cancel booking', error);
+    return res.status(500).json({
+      error: 'server_error',
+      message: 'Failed to cancel booking'
+    });
+  }
+};

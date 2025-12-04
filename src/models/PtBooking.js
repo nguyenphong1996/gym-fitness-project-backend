@@ -9,7 +9,7 @@ const PtBookingSchema = new mongoose.Schema({
   endTime: { type: Date, required: true },
   status: {
     type: String,
-    enum: ['pending_staff', 'confirmed', 'cancelled', 'completed', 'declined'],
+    enum: ['pending_staff', 'confirmed', 'cancelled', 'completed', 'declined', 'cancelled_by_staff'],
     default: 'pending_staff',
     index: true
   },

@@ -23,6 +23,7 @@ var staffRouter = require('./src/routes/staff');
 var staffAuthRouter = require('./src/routes/staffAuth');
 var staffProfileRouter = require('./src/routes/staffProfile');
 var staffAvailabilityRouter = require('./src/routes/staffAvailability');
+var staffBookingRouter = require('./src/routes/staffBooking');
 var customerPtBookingRouter = require('./src/routes/customerPtBooking');
 var adminUserRouter = require('./src/routes/adminUser');
 var classRouter = require('./src/routes/class');
@@ -30,6 +31,9 @@ var enrollmentRouter = require('./src/routes/enrollment');
 var customerVideoFavoritesRouter = require('./src/routes/customerVideoFavorites');
 var staffClassAttendanceRouter = require('./src/routes/staffClassAttendance');
 var paymentRouter = require('./src/routes/payment'); // Added for VNPAY
+var packageRouter = require('./src/routes/package'); // Added for Membership Packages
+var facilityRouter = require('./src/routes/facility'); // Added for Facility Access
+var adminFacilityRouter = require('./src/routes/adminFacility'); // Added for Admin Facility Management
 
 const mongoose = require('mongoose');
 const {
@@ -132,6 +136,7 @@ app.use('/api/auth', authRouter);
 app.use('/api/staff/auth', staffAuthRouter);
 app.use('/api/staff', staffProfileRouter);
 app.use('/api/staff', staffAvailabilityRouter);
+app.use('/api/staff/bookings', staffBookingRouter);
 app.use('/api/staff/classes', staffClassAttendanceRouter);
 app.use('/api/user', userRouter);
 app.use('/api/videos', videoRouter);
@@ -142,6 +147,9 @@ app.use('/api/customer/videos', customerVideoFavoritesRouter);
 app.use('/api/customer/pt', customerPtBookingRouter);
 app.use('/api/customer', enrollmentRouter);
 app.use('/api/v1/payment', paymentRouter); // Added for VNPAY
+app.use('/api/admin/packages', packageRouter); // Added for Membership Packages
+app.use('/api/customer/facility', facilityRouter); // Added for Facility Access
+app.use('/api/admin/facilities', adminFacilityRouter); // Added for Admin Facility Management
 
 
 /**

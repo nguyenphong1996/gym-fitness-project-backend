@@ -42,6 +42,29 @@ const options = {
             }
           }
         },
+        Facility: {
+          type: 'object',
+          properties: {
+            _id: { type: 'string' },
+            facilityCode: { type: 'string' },
+            name: { type: 'string' },
+            description: { type: 'string' },
+            qrCodeData: { type: 'string' },
+            isActive: { type: 'boolean' }
+          }
+        },
+        FacilityCheckin: {
+          type: 'object',
+          properties: {
+            _id: { type: 'string' },
+            userId: { type: 'string' },
+            facilityId: { type: 'string' },
+            facilityCode: { type: 'string' },
+            checkinTime: { type: 'string', format: 'date-time' },
+            isSuccessful: { type: 'boolean' },
+            failReason: { type: 'string' }
+          }
+        },
         User: {
           type: 'object',
           required: ['_id', 'phone', 'email', 'isVerified'],
@@ -73,6 +96,17 @@ const options = {
             updatedAt: {
               type: 'string',
               format: 'date-time'
+            },
+            membership: {
+              type: 'object',
+              properties: {
+                packageId: { type: 'string' },
+                startDate: { type: 'string', format: 'date-time' },
+                endDate: { type: 'string', format: 'date-time' },
+                remainingSessions: { type: 'number' },
+                status: { type: 'string', enum: ['active', 'expired', 'none'] },
+                lastRenewalDate: { type: 'string', format: 'date-time' }
+              }
             }
           }
         },
@@ -161,6 +195,17 @@ const options = {
             updatedAt: {
               type: 'string',
               format: 'date-time'
+            },
+            membership: {
+              type: 'object',
+              properties: {
+                packageId: { type: 'string' },
+                startDate: { type: 'string', format: 'date-time' },
+                endDate: { type: 'string', format: 'date-time' },
+                remainingSessions: { type: 'number' },
+                status: { type: 'string', enum: ['active', 'expired', 'none'] },
+                lastRenewalDate: { type: 'string', format: 'date-time' }
+              }
             }
           }
         }
