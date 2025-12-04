@@ -2,8 +2,10 @@ const moment = require('moment');
 const querystring = require('qs');
 const crypto = require("crypto");
 const axios = require('axios');
+const mongoose = require('mongoose');
 const PaymentTransaction = require('../models/PaymentTransaction');
 const PaymentToken = require('../models/PaymentToken');
+const MembershipPackage = require('../models/MembershipPackage');
 const membershipService = require('../services/membershipService');
 const { logInfo, logError } = require('../utils/logger');
 const appendPlatformParam = (url) => {
@@ -326,6 +328,18 @@ const savePaymentTokenIfAny = async (params) => {
     }
 };
 
+const escapeRegex = (value) => String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+const resolvePackage = async (pkgIdOrName) => {
+    if (!pkgIdOrName) return null;
+    if (mongoose.Types.ObjectId.isValid(pkgIdOrName)) {
+        const pkg = await MembershipPackage.findById(pkgIdOrName);
+        if (pkg) return pkg;
+    }
+    const nameRegex = new RegExp(`^${escapeRegex(pkgIdOrName)}$`, 'i');
+    return MembershipPackage.findOne({ name: nameRegex });
+};
+
 /**
  * Cập nhật trạng thái giao dịch sau khi xác thực VNPAY
  */
@@ -363,11 +377,20 @@ exports.updateTransactionStatus = async ({ txnRef, rspCode, transactionStatus, p
 
         // Kích hoạt Membership nếu giao dịch có packageId
         if (tx.packageId && tx.userId) {
+            // Đảm bảo packageId hợp lệ (chấp nhận id hoặc name)
+            let resolvedPackageId = tx.packageId;
+            const pkg = await resolvePackage(tx.packageId);
+            if (pkg) {
+                resolvedPackageId = pkg._id;
+                // Lưu lại packageId chuẩn để thống nhất dữ liệu
+                tx.packageId = pkg._id.toString();
+                await tx.save();
+            }
             try {
-                await membershipService.activateMembership(tx.userId, tx.packageId, tx.txnRef);
+                await membershipService.activateMembership(tx.userId, resolvedPackageId, tx.txnRef);
                 logInfo('vnpayService.updateTransactionStatus', 'Auto-activated membership', {
                     userId: tx.userId,
-                    packageId: tx.packageId,
+                    packageId: resolvedPackageId,
                     txnRef: tx.txnRef
                 });
             } catch (actError) {
