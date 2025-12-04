@@ -143,6 +143,8 @@ const upload = multer({
  *                   example: "User not found"
  */
 router.get('/profile', authMiddleware, userController.getProfile);
+// Alias cho client cũ gọi /me -> /profile
+router.get('/me', authMiddleware, userController.getProfile);
 
 /**
  * @swagger
