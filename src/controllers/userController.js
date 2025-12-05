@@ -17,13 +17,56 @@ function handleOtpError(res, err, context) {
   });
 }
 
+function buildMembershipResponse(user) {
+  if (!user?.membership) return null;
+
+  const pkg = user.membership.packageId;
+  const endDate = user.membership.endDate || null;
+  const expiredByDate = endDate ? new Date(endDate) < new Date() : false;
+  const status = expiredByDate ? 'expired' : (user.membership.status || 'none');
+
+  const defaultAccess = {
+    gymFloor: false,
+    swimmingPool: false,
+    sauna: false,
+    spa: false
+  };
+
+  const resolvedPackageId =
+    pkg?._id?.toString?.() ||
+    (typeof pkg === 'string' ? pkg : null) ||
+    pkg?.toString?.() ||
+    user.membership.packageId?.toString?.() ||
+    user.membership.packageId;
+
+  const remainingClassCredits = user.membership.remainingClassCredits;
+
+  return {
+    packageId: resolvedPackageId || null,
+    packageName: pkg?.name || null,
+    packageType: pkg?.type || null,
+    facilityAccess: pkg?.facilityAccess || defaultAccess,
+    sessionCount: pkg?.sessionCount ?? null,
+    classQuota: pkg?.classQuota ?? null,
+    startDate: user.membership.startDate || null,
+    endDate,
+    remainingSessions: user.membership.remainingSessions ?? 0,
+    remainingClassCredits: remainingClassCredits === undefined ? 0 : remainingClassCredits,
+    status
+  };
+}
+
 exports.getProfile = async (req, res) => {
   const context = 'userController.getProfile';
   try {
-    const user = await User.findById(req.user.id).lean();
+    const user = await User.findById(req.user.id)
+      .populate('membership.packageId')
+      .lean();
     if (!user) {
       return res.status(404).json({ error: 'user_not_found', message: 'User not found' });
     }
+
+    const membership = buildMembershipResponse(user);
 
     const profile = {
       id: user._id,
@@ -36,7 +79,8 @@ exports.getProfile = async (req, res) => {
       weight: user.weight || null,
       height: user.height || null,
       isVerified: user.isVerified,
-      createdAt: user.createdAt
+      createdAt: user.createdAt,
+      membership
     };
 
     logSuccess(context, 'Lấy profile thành công', { userId: user._id });
@@ -45,6 +89,42 @@ exports.getProfile = async (req, res) => {
   } catch (err) {
     logError(context, 'Lỗi khi lấy profile', err);
     return res.status(500).json({ error: 'server_error', message: 'Failed to get profile' });
+  }
+};
+
+exports.getMembership = async (req, res) => {
+  const context = 'userController.getMembership';
+  try {
+    const user = await User.findById(req.user.id)
+      .populate('membership.packageId')
+      .lean();
+
+    if (!user) {
+      return res.status(404).json({ error: 'user_not_found', message: 'User not found' });
+    }
+
+    const membership = buildMembershipResponse(user);
+
+    if (!membership) {
+      logSuccess(context, 'User has no membership', { userId: req.user.id });
+      return res.json({
+        ok: true,
+        membership: null,
+        message: 'User has no active membership'
+      });
+    }
+
+    logSuccess(context, 'Fetched membership info', {
+      userId: req.user.id,
+      packageName: membership.packageName,
+      status: membership.status
+    });
+
+    return res.json({ ok: true, membership });
+
+  } catch (err) {
+    logError(context, 'Lỗi khi lấy membership', err);
+    return res.status(500).json({ error: 'server_error', message: 'Failed to get membership info' });
   }
 };
 

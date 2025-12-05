@@ -148,6 +148,50 @@ router.get('/me', authMiddleware, userController.getProfile);
 
 /**
  * @swagger
+ * /api/user/membership:
+ *   get:
+ *     summary: Lấy thông tin membership hiện tại của user
+ *     description: Trả về gói tập, quyền truy cập facility và trạng thái membership (nếu có).
+ *     tags: [User]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Thông tin membership hoặc null nếu chưa mua
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 ok: { type: boolean, example: true }
+ *                 membership:
+ *                   type: object
+ *                   nullable: true
+ *                   properties:
+ *                     packageId: { type: string, example: "64f0c1c2a1b2c3d4e5f60789" }
+ *                     packageName: { type: string, example: "Plus" }
+ *                     packageType: { type: string, example: "combo" }
+ *                     facilityAccess:
+ *                       type: object
+ *                       properties:
+ *                         gymFloor: { type: boolean, example: true }
+ *                         swimmingPool: { type: boolean, example: false }
+ *                         sauna: { type: boolean, example: true }
+ *                         spa: { type: boolean, example: false }
+ *                     sessionCount: { type: number, nullable: true, example: 10 }
+ *                     classQuota: { type: number, nullable: true, example: 8 }
+ *                     startDate: { type: string, format: date-time, nullable: true }
+ *                     endDate: { type: string, format: date-time, nullable: true }
+ *                     remainingSessions: { type: number, example: 5 }
+ *                     remainingClassCredits: { type: number, nullable: true, example: 3 }
+ *                     status: { type: string, enum: [active, expired, none], example: "active" }
+ *       404:
+ *         description: User không tồn tại
+ */
+router.get('/membership', authMiddleware, userController.getMembership);
+
+/**
+ * @swagger
  * /api/user/profile:
  *   put:
  *     summary: Cập nhật thông tin profile (trừ avatar)

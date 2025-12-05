@@ -2,6 +2,7 @@
 const express = require('express');
 const router = express.Router();
 const enrollmentController = require('../controllers/enrollmentController');
+const userController = require('../controllers/userController');
 const authMiddleware = require('../middlewares/authMiddleware');
 const adminMiddleware = require('../middlewares/adminMiddleware');
 const {
@@ -16,6 +17,41 @@ const {
  */
 
 // Customer endpoints
+/**
+ * @swagger
+ * /api/customer/membership:
+ *   get:
+ *     tags: [Class Enrollment]
+ *     summary: Lấy thông tin membership hiện tại của customer
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Trả về thông tin membership hoặc null nếu chưa mua
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 ok: { type: boolean, example: true }
+ *                 membership:
+ *                   type: object
+ *                   nullable: true
+ *                   properties:
+ *                     packageName: { type: string, example: "Plus" }
+ *                     facilityAccess:
+ *                       type: object
+ *                       properties:
+ *                         gymFloor: { type: boolean }
+ *                         swimmingPool: { type: boolean }
+ *                         sauna: { type: boolean }
+ *                         spa: { type: boolean }
+ *                     status: { type: string, enum: [active, expired, none] }
+ *       401:
+ *         description: Unauthorized
+ */
+router.get('/membership', authMiddleware, userController.getMembership);
+
 /**
  * @swagger
  * /api/customer/classes/{classId}/enroll:
