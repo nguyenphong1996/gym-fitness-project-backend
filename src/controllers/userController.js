@@ -5,6 +5,7 @@ const User = require('../models/User');
 const OtpLog = require('../models/OtpLog');
 const { OtpServiceError } = require('../services/otpService');
 const otpService = require('../services/otpService');
+const membershipService = require('../services/membershipService');
 const { uploadImage, deleteResource } = require('../utils/cloudinary');
 const { validateProfileUpdate, validateOtp } = require('../utils/validation');
 const { logError, logSuccess, logWarning, logDebug, logUserAction, logAvatarUpload } = require('../utils/logger');
@@ -52,7 +53,8 @@ function buildMembershipResponse(user) {
     endDate,
     remainingSessions: user.membership.remainingSessions ?? 0,
     remainingClassCredits: remainingClassCredits === undefined ? 0 : remainingClassCredits,
-    status
+    status,
+    billingCycle: user.membership.billingCycle || 'month'
   };
 }
 
@@ -125,6 +127,33 @@ exports.getMembership = async (req, res) => {
   } catch (err) {
     logError(context, 'Lỗi khi lấy membership', err);
     return res.status(500).json({ error: 'server_error', message: 'Failed to get membership info' });
+  }
+};
+
+exports.getUpgradeQuote = async (req, res) => {
+  const context = 'userController.getUpgradeQuote';
+  try {
+    const { packageId, billingCycle } = req.query;
+    if (!packageId) {
+      return res.status(400).json({ error: 'missing_package_id', message: 'packageId is required' });
+    }
+
+    const quote = await membershipService.calculateUpgradeQuote(req.user.id, packageId, billingCycle);
+
+    logSuccess(context, 'Calculated upgrade quote', {
+      userId: req.user.id,
+      targetPackage: packageId,
+      billingCycle: quote.billingCycle
+    });
+
+    return res.json({ ok: true, quote });
+  } catch (err) {
+    const status = err.status || 500;
+    const code = err.code || 'server_error';
+    const message = err.message || 'Failed to calculate upgrade quote';
+
+    logError(context, 'Lỗi khi tính phí nâng cấp', err);
+    return res.status(status).json({ error: code, message });
   }
 };
 

@@ -15,6 +15,10 @@ const paymentTransactionSchema = new mongoose.Schema({
   bankCode: { type: String, default: null },
   cardType: { type: String, default: null },
   token: { type: String, default: null }, // token trả về từ VNPAY (masked)
+  billingCycle: { type: String, enum: ['month', 'quarter', 'year'], default: 'month' },
+  isUpgrade: { type: Boolean, default: false },
+  upgradeFromPackageId: { type: String, default: null },
+  creditValue: { type: Number, default: 0 },
   rawReturnParams: { type: Object, default: {} },
   rawIpnParams: { type: Object, default: {} },
   paidAt: { type: Date, default: null },

@@ -192,6 +192,32 @@ router.get('/membership', authMiddleware, userController.getMembership);
 
 /**
  * @swagger
+ * /api/user/membership/upgrade/quote:
+ *   get:
+ *     summary: Tính phí nâng cấp gói (trừ giá trị còn lại của gói hiện tại)
+ *     tags: [User]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: packageId
+ *         required: true
+ *         schema: { type: string }
+ *       - in: query
+ *         name: billingCycle
+ *         schema: { type: string, enum: [month, quarter, year], default: month }
+ *     responses:
+ *       200:
+ *         description: Trả về số tiền cần thanh toán sau khi trừ giá trị còn lại
+ *       400:
+ *         description: Thiếu packageId hoặc không có membership để nâng cấp
+ *       404:
+ *         description: User hoặc package không tồn tại
+ */
+router.get('/membership/upgrade/quote', authMiddleware, userController.getUpgradeQuote);
+
+/**
+ * @swagger
  * /api/user/profile:
  *   put:
  *     summary: Cập nhật thông tin profile (trừ avatar)

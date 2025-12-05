@@ -3,17 +3,101 @@ const membershipService = require('../services/membershipService');
 const Enrollment = require('../models/Enrollment'); // Assuming Enrollment model is relevant
 const PaymentTransaction = require('../models/PaymentTransaction');
 const PaymentToken = require('../models/PaymentToken');
+const MembershipPackage = require('../models/MembershipPackage');
 const { logInfo, logError } = require('../utils/logger');
+
+const BILLING_CYCLE_MULTIPLIERS = {
+    month: 1,
+    quarter: 3,
+    year: 12,
+};
+
+const BILLING_CYCLE_DISCOUNTS = {
+    month: 0,
+    quarter: 20,
+    year: 50,
+};
+
+const normalizeBillingCycle = (cycle = 'month') => {
+    const c = (cycle || '').toString().toLowerCase();
+    if (['quarter', 'quarterly', '3m', 'quy'].includes(c)) return 'quarter';
+    if (['year', 'yearly', 'annual', '12m', 'nam'].includes(c)) return 'year';
+    return 'month';
+};
+
+const computePackageAmount = async (packageId, billingCycle) => {
+    const pkg = await MembershipPackage.findById(packageId);
+    if (!pkg) {
+        const err = new Error('Package not found');
+        err.code = 'package_not_found';
+        throw err;
+    }
+
+    const cycle = normalizeBillingCycle(billingCycle);
+    const multiplier = BILLING_CYCLE_MULTIPLIERS[cycle] || 1;
+    const discount = BILLING_CYCLE_DISCOUNTS[cycle] || 0;
+    const base = pkg.price * multiplier;
+    const amount = Math.round(base * (1 - discount / 100));
+
+    return { pkg, amount, cycle };
+};
 
 exports.createPaymentUrl = async (req, res, next) => {
     try {
-        const { amount, orderInfo, bankCode, cardType } = req.body; // Frontend will send amount, orderInfo, bankCode
-        if (!amount) {
+        const { amount, orderInfo, bankCode, cardType, packageId, billingCycle, isUpgrade = false, userId } = req.body; // Frontend will send amount, orderInfo, bankCode
+        let billingCycleNorm = normalizeBillingCycle(billingCycle);
+        let computedAmount = amount;
+        let upgradeFromPackageId = null;
+        let creditValue = 0;
+
+        if (isUpgrade) {
+            if (!userId) {
+                return res.status(400).json({ message: 'userId is required for upgrade' });
+            }
+            if (!packageId) {
+                return res.status(400).json({ message: 'packageId is required for upgrade' });
+            }
+            try {
+                const quote = await membershipService.calculateUpgradeQuote(userId, packageId, billingCycleNorm);
+                computedAmount = quote.amountDue;
+                billingCycleNorm = quote.billingCycle;
+                upgradeFromPackageId = quote.upgradeFromPackageId;
+                creditValue = quote.creditValue;
+            } catch (err) {
+                const status = err.status || 500;
+                return res.status(status).json({ message: err.message || 'Failed to calculate upgrade price', error: err.code || 'server_error' });
+            }
+        } else if (packageId) {
+            try {
+                const priced = await computePackageAmount(packageId, billingCycleNorm);
+                computedAmount = priced.amount;
+                billingCycleNorm = priced.cycle;
+            } catch (err) {
+                if (err.code === 'package_not_found') {
+                    return res.status(404).json({ message: 'Package not found' });
+                }
+                throw err;
+            }
+        } else if (!amount) {
             return res.status(400).json({ message: 'Amount is required' });
         }
 
-        const vnpUrl = vnpayService.createPaymentUrl(req, amount, orderInfo, bankCode, cardType);
-        res.status(200).json({ vnpUrl });
+        const { vnpUrl, txnRef } = await vnpayService.createPaymentUrl(
+            req,
+            computedAmount,
+            orderInfo,
+            bankCode,
+            cardType,
+            {
+                userId,
+                packageId,
+                billingCycle: billingCycleNorm,
+                isUpgrade,
+                upgradeFromPackageId,
+                creditValue
+            }
+        );
+        res.status(200).json({ vnpUrl, txnRef, amount: computedAmount, billingCycle: billingCycleNorm });
     } catch (error) {
         console.error('Error creating VNPAY URL:', error);
         next(error);
@@ -106,11 +190,42 @@ exports.vnpayIpn = async (req, res, next) => {
  */
 exports.createVnpayTokenUrl = async (req, res, next) => {
     try {
-        const { amount = 0, orderInfo, cardType = '01', bankCode, mode = 'pay_and_create', userId, packageId } = req.body;
+        const { amount = 0, orderInfo, cardType = '01', bankCode, mode = 'pay_and_create', userId, packageId, billingCycle, isUpgrade = false } = req.body;
         if (!userId) {
             return res.status(400).json({ message: 'userId is required' });
         }
-        if (mode !== 'token_create' && !amount) {
+
+        let billingCycleNorm = normalizeBillingCycle(billingCycle);
+        let computedAmount = amount;
+        let upgradeFromPackageId = null;
+        let creditValue = 0;
+
+        if (isUpgrade) {
+            if (!packageId) {
+                return res.status(400).json({ message: 'packageId is required for upgrade' });
+            }
+            try {
+                const quote = await membershipService.calculateUpgradeQuote(userId, packageId, billingCycleNorm);
+                computedAmount = quote.amountDue;
+                billingCycleNorm = quote.billingCycle;
+                upgradeFromPackageId = quote.upgradeFromPackageId;
+                creditValue = quote.creditValue;
+            } catch (err) {
+                const status = err.status || 500;
+                return res.status(status).json({ message: err.message || 'Failed to calculate upgrade price', error: err.code || 'server_error' });
+            }
+        } else if (packageId) {
+            try {
+                const priced = await computePackageAmount(packageId, billingCycleNorm);
+                computedAmount = priced.amount;
+                billingCycleNorm = priced.cycle;
+            } catch (err) {
+                if (err.code === 'package_not_found') {
+                    return res.status(404).json({ message: 'Package not found' });
+                }
+                throw err;
+            }
+        } else if (mode !== 'token_create' && !amount) {
             return res.status(400).json({ message: 'amount is required for pay_and_create' });
         }
 
@@ -118,23 +233,42 @@ exports.createVnpayTokenUrl = async (req, res, next) => {
         logInfo('paymentController.createVnpayTokenUrl', 'Tạo URL VNPAY token init', {
             userId,
             packageId,
-            amount,
+            amount: computedAmount,
             command,
             cardType,
             bankCode,
+            billingCycle: billingCycleNorm,
+            isUpgrade,
         });
         const { vnpUrl, txnRef } = await vnpayService.createTokenUrl(req, {
-            amount,
+            amount: computedAmount,
             orderInfo,
             userId,
             cardType,
             bankCode,
             command,
+            packageId,
+            billingCycle: billingCycleNorm,
+            isUpgrade,
+            upgradeFromPackageId,
+            creditValue,
         });
 
         // Ghi nhận transaction (cập nhật thêm packageId nếu có)
         if (packageId) {
-            await PaymentTransaction.updateOne({ txnRef }, { $set: { packageId } });
+            await PaymentTransaction.updateOne(
+                { txnRef },
+                {
+                    $set: {
+                        packageId,
+                        billingCycle: billingCycleNorm,
+                        amount: computedAmount,
+                        isUpgrade,
+                        upgradeFromPackageId,
+                        creditValue
+                    }
+                }
+            );
         }
 
         logInfo('paymentController.createVnpayTokenUrl', 'Tạo URL thành công', { txnRef, command });
@@ -151,10 +285,7 @@ exports.createVnpayTokenUrl = async (req, res, next) => {
  */
 exports.createVnpayTokenPayUrl = async (req, res, next) => {
     try {
-        const { amount, orderInfo, token, userId, cardType = '01', bankCode, packageId } = req.body;
-        if (!amount) {
-            return res.status(400).json({ message: 'amount is required' });
-        }
+        const { amount, orderInfo, token, userId, cardType = '01', bankCode, packageId, billingCycle, isUpgrade = false } = req.body;
         if (!token) {
             return res.status(400).json({ message: 'token is required' });
         }
@@ -162,27 +293,80 @@ exports.createVnpayTokenPayUrl = async (req, res, next) => {
             return res.status(400).json({ message: 'userId is required' });
         }
 
+        let billingCycleNorm = normalizeBillingCycle(billingCycle);
+        let computedAmount = amount;
+        let upgradeFromPackageId = null;
+        let creditValue = 0;
+
+        if (isUpgrade) {
+            if (!packageId) {
+                return res.status(400).json({ message: 'packageId is required for upgrade' });
+            }
+            try {
+                const quote = await membershipService.calculateUpgradeQuote(userId, packageId, billingCycleNorm);
+                computedAmount = quote.amountDue;
+                billingCycleNorm = quote.billingCycle;
+                upgradeFromPackageId = quote.upgradeFromPackageId;
+                creditValue = quote.creditValue;
+            } catch (err) {
+                const status = err.status || 500;
+                return res.status(status).json({ message: err.message || 'Failed to calculate upgrade price', error: err.code || 'server_error' });
+            }
+        } else if (packageId) {
+            try {
+                const priced = await computePackageAmount(packageId, billingCycleNorm);
+                computedAmount = priced.amount;
+                billingCycleNorm = priced.cycle;
+            } catch (err) {
+                if (err.code === 'package_not_found') {
+                    return res.status(404).json({ message: 'Package not found' });
+                }
+                throw err;
+            }
+        } else if (!amount) {
+            return res.status(400).json({ message: 'amount is required' });
+        }
+
         logInfo('paymentController.createVnpayTokenPayUrl', 'Tạo URL VNPAY token_pay', {
             userId,
-            amount,
+            amount: computedAmount,
             packageId,
             cardType,
             bankCode,
+            billingCycle: billingCycleNorm,
             hasToken: !!token,
+            isUpgrade,
         });
 
         const { vnpUrl, txnRef } = await vnpayService.createTokenUrl(req, {
-            amount,
+            amount: computedAmount,
             orderInfo,
             userId,
             token,
             cardType,
             bankCode,
             command: 'token_pay',
+            packageId,
+            billingCycle: billingCycleNorm,
+            isUpgrade,
+            upgradeFromPackageId,
+            creditValue,
         });
 
         if (packageId) {
-            await PaymentTransaction.updateOne({ txnRef }, { $set: { packageId } });
+            await PaymentTransaction.updateOne(
+                { txnRef },
+                {
+                    $set: {
+                        packageId,
+                        billingCycle: billingCycleNorm,
+                        amount: computedAmount,
+                        isUpgrade,
+                        upgradeFromPackageId,
+                        creditValue
+                    }
+                }
+            );
         }
 
         logInfo('paymentController.createVnpayTokenPayUrl', 'Tạo URL token_pay thành công', { txnRef });

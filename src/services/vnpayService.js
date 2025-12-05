@@ -75,7 +75,15 @@ const getClientIp = (req) => {
         '0.0.0.0';
 };
 
-exports.createPaymentUrl = (req, amount, orderInfo, bankCode, cardType) => {
+exports.createPaymentUrl = async (req, amount, orderInfo, bankCode, cardType, options = {}) => {
+    const {
+        userId = null,
+        packageId = null,
+        billingCycle = 'month',
+        isUpgrade = false,
+        upgradeFromPackageId = null,
+        creditValue = 0,
+    } = options;
     process.env.TZ = 'Asia/Ho_Chi_Minh';
     
     let date = new Date();
@@ -123,7 +131,26 @@ exports.createPaymentUrl = (req, amount, orderInfo, bankCode, cardType) => {
     vnp_Params['vnp_SecureHash'] = signed;
     vnpUrl += '?' + querystring.stringify(vnp_Params, { encode: false });
 
-    return vnpUrl;
+    // Ghi nhận transaction (best-effort, không chặn flow)
+    try {
+        await PaymentTransaction.create({
+            txnRef: orderId,
+            channel: 'vnpay_pay',
+            userId,
+            amount: amount || 0,
+            orderInfo,
+            status: 'pending',
+            packageId,
+            billingCycle,
+            isUpgrade,
+            upgradeFromPackageId,
+            creditValue
+        });
+    } catch (err) {
+        console.error('Không lưu được PaymentTransaction:', err.message);
+    }
+
+    return { vnpUrl, txnRef: orderId };
 };
 
 exports.vnpayReturn = async (req) => {
@@ -157,6 +184,11 @@ exports.createTokenUrl = async (req, {
     bankCode,
     command = 'pay_and_create',
     storeToken = 1,
+    packageId,
+    billingCycle = 'month',
+    isUpgrade = false,
+    upgradeFromPackageId = null,
+    creditValue = 0,
 }) => {
     process.env.TZ = 'Asia/Ho_Chi_Minh';
     const date = new Date();
@@ -230,6 +262,11 @@ exports.createTokenUrl = async (req, {
         amount,
         cardType,
         bankCode,
+        packageId,
+        billingCycle,
+        isUpgrade,
+        upgradeFromPackageId,
+        creditValue,
     });
 
     // Lưu log pending (không làm hỏng flow nếu DB lỗi)
@@ -241,6 +278,11 @@ exports.createTokenUrl = async (req, {
             amount: amount || 0,
             orderInfo,
             status: 'pending',
+            packageId,
+            billingCycle,
+            isUpgrade,
+            upgradeFromPackageId,
+            creditValue
         });
     } catch (err) {
         console.error('Không lưu được PaymentTransaction:', err.message);
@@ -372,10 +414,10 @@ exports.updateTransactionStatus = async ({ txnRef, rspCode, transactionStatus, p
     await tx.save();
 
     // Lưu token nếu có trong params và giao dịch thành công
-    if (isSuccess) {
+        if (isSuccess) {
         await savePaymentTokenIfAny(params);
 
-        // Kích hoạt Membership nếu giao dịch có packageId
+        // Kích hoạt hoặc nâng cấp Membership nếu giao dịch có packageId
         if (tx.packageId && tx.userId) {
             // Đảm bảo packageId hợp lệ (chấp nhận id hoặc name)
             let resolvedPackageId = tx.packageId;
@@ -387,14 +429,27 @@ exports.updateTransactionStatus = async ({ txnRef, rspCode, transactionStatus, p
                 await tx.save();
             }
             try {
-                await membershipService.activateMembership(tx.userId, resolvedPackageId, tx.txnRef);
-                logInfo('vnpayService.updateTransactionStatus', 'Auto-activated membership', {
-                    userId: tx.userId,
-                    packageId: resolvedPackageId,
-                    txnRef: tx.txnRef
-                });
+                if (tx.isUpgrade) {
+                    await membershipService.upgradeMembership(tx.userId, resolvedPackageId, tx.txnRef, tx.billingCycle);
+                    logInfo('vnpayService.updateTransactionStatus', 'Auto-upgraded membership', {
+                        userId: tx.userId,
+                        packageId: resolvedPackageId,
+                        txnRef: tx.txnRef,
+                        billingCycle: tx.billingCycle,
+                        upgradeFromPackageId: tx.upgradeFromPackageId,
+                        creditValue: tx.creditValue
+                    });
+                } else {
+                    await membershipService.activateMembership(tx.userId, resolvedPackageId, tx.txnRef, tx.billingCycle);
+                    logInfo('vnpayService.updateTransactionStatus', 'Auto-activated membership', {
+                        userId: tx.userId,
+                        packageId: resolvedPackageId,
+                        txnRef: tx.txnRef,
+                        billingCycle: tx.billingCycle
+                    });
+                }
             } catch (actError) {
-                logError('vnpayService.updateTransactionStatus', 'Failed to auto-activate membership', actError);
+                logError('vnpayService.updateTransactionStatus', 'Failed to auto-activate/upgrade membership', actError);
                 // Không throw error để tránh rollback transaction status (tiền đã trừ rồi)
             }
         }
