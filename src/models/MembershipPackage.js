@@ -8,6 +8,7 @@ const MembershipPackageSchema = new mongoose.Schema({
     enum: ['gym_access', 'class_access', 'pt_session', 'combo'], 
     required: true 
   },
+  tier: { type: Number, default: 1, min: 1 }, // Dùng để xác định thứ hạng (chặn downgrade)
   price: { type: Number, required: true, min: 0 },
   durationDays: { type: Number, required: true, min: 1 }, // Thời hạn sử dụng (ngày)
   sessionCount: { type: Number, default: 0 }, // Số buổi PT (nếu có)

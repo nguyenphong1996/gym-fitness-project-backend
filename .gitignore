@@ -5,3 +5,6 @@ gemini.md
 # Ignore local documentation/guide markdown files, but keep README.md in repo
 *.md
 !README.md
+
+# Ignore local scripts (seed/utility) not needed for deployment
+src/scripts/

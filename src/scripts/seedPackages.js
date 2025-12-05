@@ -5,6 +5,7 @@ const connectDB = require('../config/db');
 const packages = [
   {
     name: 'Basic',
+    tier: 1,
     price: 690000,
     durationDays: 30,
     type: 'gym_access',
@@ -22,6 +23,7 @@ const packages = [
   },
   {
     name: 'Plus',
+    tier: 2,
     price: 890000,
     durationDays: 30,
     type: 'class_access', // Bao gồm gym + lớp
@@ -39,6 +41,7 @@ const packages = [
   },
   {
     name: 'Premium',
+    tier: 3,
     price: 1290000,
     durationDays: 30,
     type: 'combo', // Gym + Lớp + PT + Ưu đãi

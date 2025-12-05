@@ -85,8 +85,11 @@ exports.calculateUpgradeQuote = async (userId, targetPackageId, billingCycle = '
     throw err;
   }
 
-  // Không cho hạ cấp: so sánh giá base (tháng)
-  if ((targetPkg.price || 0) <= (currentPkg.price || 0)) {
+  // Không cho hạ cấp: so sánh tier (mặc định = 1 nếu thiếu)
+  const currentTier = currentPkg.tier;
+  const targetTier = targetPkg.tier;
+  const hasTierInfo = currentTier !== undefined && targetTier !== undefined;
+  if (hasTierInfo ? (targetTier < currentTier) : ((targetPkg.price || 0) < (currentPkg.price || 0))) {
     const err = new Error('Downgrade is not allowed');
     err.code = 'downgrade_not_allowed';
     err.status = 400;
