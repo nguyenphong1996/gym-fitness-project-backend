@@ -61,9 +61,8 @@ function buildMembershipResponse(user) {
 exports.getProfile = async (req, res) => {
   const context = 'userController.getProfile';
   try {
-    const user = await User.findById(req.user.id)
-      .populate('membership.packageId')
-      .lean();
+    const userDoc = await membershipService.getUserWithFreshMembership(req.user.id);
+    const user = userDoc?.toObject ? userDoc.toObject() : userDoc;
     if (!user) {
       return res.status(404).json({ error: 'user_not_found', message: 'User not found' });
     }
@@ -97,9 +96,8 @@ exports.getProfile = async (req, res) => {
 exports.getMembership = async (req, res) => {
   const context = 'userController.getMembership';
   try {
-    const user = await User.findById(req.user.id)
-      .populate('membership.packageId')
-      .lean();
+    const userDoc = await membershipService.getUserWithFreshMembership(req.user.id);
+    const user = userDoc?.toObject ? userDoc.toObject() : userDoc;
 
     if (!user) {
       return res.status(404).json({ error: 'user_not_found', message: 'User not found' });

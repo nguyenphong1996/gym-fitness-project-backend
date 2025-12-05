@@ -52,7 +52,7 @@ const calculatePackagePrice = (pkg, billingCycle = 'month') => {
  */
 exports.calculateUpgradeQuote = async (userId, targetPackageId, billingCycle = 'month') => {
   const context = 'membershipService.calculateUpgradeQuote';
-  const user = await User.findById(userId).populate('membership.packageId');
+  const user = await exports.getUserWithFreshMembership(userId);
   if (!user) {
     const err = new Error('User not found');
     err.code = 'user_not_found';
@@ -233,7 +233,7 @@ exports.upgradeMembership = async (userId, targetPackageId, transactionId, billi
   const context = 'membershipService.upgradeMembership';
   try {
     const quote = await exports.calculateUpgradeQuote(userId, targetPackageId, billingCycle);
-    const user = await User.findById(userId);
+    const user = await exports.getUserWithFreshMembership(userId);
     const targetPkg = await findPackageByIdOrName(targetPackageId);
 
     if (!user) throw new Error(`User not found: ${userId}`);
@@ -275,6 +275,116 @@ exports.upgradeMembership = async (userId, targetPackageId, transactionId, billi
     return user.membership;
   } catch (error) {
     logError(context, 'Failed to upgrade membership', error);
+    throw error;
+  }
+};
+
+const revertTempIfExpired = async (user) => {
+  if (!user?.membershipTemp?.isTemporary) return { reverted: false, user };
+  const now = new Date();
+  if (user.membershipTemp.endDate && user.membershipTemp.endDate <= now) {
+    const restore = user.membershipTemp.restoreTo || {};
+    user.membership = {
+      packageId: restore.packageId || null,
+      startDate: restore.startDate || null,
+      endDate: restore.endDate || null,
+      remainingSessions: restore.remainingSessions ?? 0,
+      remainingClassCredits: restore.remainingClassCredits ?? 0,
+      status: restore.status || 'expired',
+      billingCycle: restore.billingCycle || 'month',
+      lastRenewalDate: restore.startDate || null
+    };
+    user.membershipTemp = undefined;
+    await user.save();
+    await user.populate('membership.packageId');
+    return { reverted: true, user };
+  }
+  return { reverted: false, user };
+};
+
+exports.getUserWithFreshMembership = async (userId) => {
+  const user = await User.findById(userId).populate(['membership.packageId', 'membershipTemp.packageId', 'membershipTemp.restoreTo.packageId']);
+  if (!user) return null;
+  await revertTempIfExpired(user);
+  return user;
+};
+
+/**
+ * Nâng cấp tạm thời: áp gói mới trong thời gian temp, sau đó sẽ revert về gói cũ
+ */
+exports.upgradeMembershipTemporary = async (userId, targetPackageId, transactionId, billingCycle = 'month') => {
+  const context = 'membershipService.upgradeMembershipTemporary';
+  try {
+    const user = await exports.getUserWithFreshMembership(userId);
+    if (!user) throw new Error(`User not found: ${userId}`);
+
+    if (user.membershipTemp?.isTemporary) {
+      throw Object.assign(new Error('Temporary upgrade already active'), { code: 'temp_upgrade_in_progress', status: 400 });
+    }
+
+    const quote = await exports.calculateUpgradeQuote(userId, targetPackageId, billingCycle);
+    const targetPkg = await findPackageByIdOrName(targetPackageId);
+    if (!targetPkg) throw new Error(`Package not found: ${targetPackageId}`);
+
+    // Backup gói hiện tại để khôi phục sau khi temp hết hạn
+    const backup = {
+      packageId: user.membership.packageId,
+      startDate: user.membership.startDate,
+      endDate: user.membership.endDate,
+      remainingSessions: user.membership.remainingSessions,
+      remainingClassCredits: user.membership.remainingClassCredits,
+      status: user.membership.status,
+      billingCycle: user.membership.billingCycle
+    };
+
+    const cycle = quote.billingCycle || normalizeBillingCycle(billingCycle);
+    const multiplier = BILLING_CYCLE_MULTIPLIERS[cycle] || 1;
+    const now = new Date();
+    const tempEndDate = new Date(now);
+    tempEndDate.setDate(tempEndDate.getDate() + (targetPkg.durationDays || 0) * multiplier);
+
+    const newSessions = (targetPkg.sessionCount || 0) * multiplier;
+    const newClassCredits =
+      targetPkg.classQuota === null || targetPkg.classQuota === undefined
+        ? null
+        : (targetPkg.classQuota || 0) * multiplier;
+
+    user.membership = {
+      packageId: targetPkg._id,
+      startDate: now,
+      endDate: tempEndDate,
+      remainingSessions: newSessions,
+      remainingClassCredits: newClassCredits,
+      status: 'active',
+      lastRenewalDate: now,
+      billingCycle: cycle
+    };
+
+    user.membershipTemp = {
+      isTemporary: true,
+      packageId: targetPkg._id,
+      startDate: now,
+      endDate: tempEndDate,
+      billingCycle: cycle,
+      transactionId,
+      restoreTo: backup
+    };
+
+    await user.save();
+
+    logInfo(context, `Temporary upgrade activated for user ${userId}`, {
+      from: backup.packageId?.toString?.(),
+      to: targetPkg.name,
+      transactionId,
+      billingCycle: cycle,
+      creditValue: quote.creditValue,
+      amountDue: quote.amountDue,
+      tempEndDate
+    });
+
+    return user.membership;
+  } catch (error) {
+    logError(context, 'Failed to temporary upgrade membership', error);
     throw error;
   }
 };

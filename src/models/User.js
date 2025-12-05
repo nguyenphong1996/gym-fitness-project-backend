@@ -65,6 +65,25 @@ const UserSchema = new mongoose.Schema({
     billingCycle: { type: String, enum: ['month', 'quarter', 'year'], default: 'month' }
   },
 
+  // Temporary upgrade info (dùng cho nâng cấp tạm thời và khôi phục về gói cũ)
+  membershipTemp: {
+    isTemporary: { type: Boolean, default: false },
+    packageId: { type: mongoose.Schema.Types.ObjectId, ref: 'MembershipPackage' },
+    startDate: { type: Date },
+    endDate: { type: Date },
+    billingCycle: { type: String, enum: ['month', 'quarter', 'year'], default: 'month' },
+    transactionId: { type: String },
+    restoreTo: {
+      packageId: { type: mongoose.Schema.Types.ObjectId, ref: 'MembershipPackage' },
+      startDate: { type: Date },
+      endDate: { type: Date },
+      remainingSessions: { type: Number },
+      remainingClassCredits: { type: Number },
+      status: { type: String },
+      billingCycle: { type: String }
+    }
+  },
+
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now }
 });

@@ -55,6 +55,9 @@ const paymentController = require('../controllers/paymentController');
  *               isUpgrade:
  *                 type: boolean
  *                 description: "true nếu là nâng cấp gói (trừ giá trị còn lại của gói hiện tại). Yêu cầu kèm userId & packageId."
+ *               isTemporary:
+ *                 type: boolean
+ *                 description: "true nếu là nâng cấp tạm thời (sẽ khôi phục gói cũ khi hết hạn gói tạm)."
  *               userId:
  *                 type: string
  *                 description: "Bắt buộc nếu isUpgrade=true để tính giá trị còn lại."
@@ -190,6 +193,7 @@ router.get('/vnpay-ipn', paymentController.vnpayIpn);
  *               packageId: { type: string }
  *               billingCycle: { type: string, enum: ["month","quarter","year"], description: "Quý giảm 20%, năm giảm 50%" }
  *               isUpgrade: { type: boolean, description: "true nếu nâng cấp gói" }
+ *               isTemporary: { type: boolean, description: "true nếu nâng cấp tạm thời" }
  *     responses:
  *       200:
  *         description: URL VNPAY token
@@ -218,6 +222,7 @@ router.post('/token/init', paymentController.createVnpayTokenUrl);
  *               packageId: { type: string }
  *               billingCycle: { type: string, enum: ["month","quarter","year"], description: "Quý giảm 20%, năm giảm 50%" }
  *               isUpgrade: { type: boolean, description: "true nếu nâng cấp gói" }
+ *               isTemporary: { type: boolean, description: "true nếu nâng cấp tạm thời" }
  *     responses:
  *       200:
  *         description: URL VNPAY token pay

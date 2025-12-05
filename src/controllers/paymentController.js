@@ -44,13 +44,15 @@ const computePackageAmount = async (packageId, billingCycle) => {
 
 exports.createPaymentUrl = async (req, res, next) => {
     try {
-        const { amount, orderInfo, bankCode, cardType, packageId, billingCycle, isUpgrade = false, userId } = req.body; // Frontend will send amount, orderInfo, bankCode
+        const { amount, orderInfo, bankCode, cardType, packageId, billingCycle, isUpgrade = false, isTemporary = false, userId } = req.body; // Frontend will send amount, orderInfo, bankCode
         let billingCycleNorm = normalizeBillingCycle(billingCycle);
         let computedAmount = amount;
         let upgradeFromPackageId = null;
         let creditValue = 0;
 
-        if (isUpgrade) {
+        const upgradeFlag = isUpgrade || isTemporary;
+
+        if (upgradeFlag) {
             if (!userId) {
                 return res.status(400).json({ message: 'userId is required for upgrade' });
             }
@@ -92,7 +94,8 @@ exports.createPaymentUrl = async (req, res, next) => {
                 userId,
                 packageId,
                 billingCycle: billingCycleNorm,
-                isUpgrade,
+                isUpgrade: upgradeFlag,
+                isTemporary,
                 upgradeFromPackageId,
                 creditValue
             }
@@ -190,7 +193,7 @@ exports.vnpayIpn = async (req, res, next) => {
  */
 exports.createVnpayTokenUrl = async (req, res, next) => {
     try {
-        const { amount = 0, orderInfo, cardType = '01', bankCode, mode = 'pay_and_create', userId, packageId, billingCycle, isUpgrade = false } = req.body;
+        const { amount = 0, orderInfo, cardType = '01', bankCode, mode = 'pay_and_create', userId, packageId, billingCycle, isUpgrade = false, isTemporary = false } = req.body;
         if (!userId) {
             return res.status(400).json({ message: 'userId is required' });
         }
@@ -200,7 +203,9 @@ exports.createVnpayTokenUrl = async (req, res, next) => {
         let upgradeFromPackageId = null;
         let creditValue = 0;
 
-        if (isUpgrade) {
+        const upgradeFlag = isUpgrade || isTemporary;
+
+        if (upgradeFlag) {
             if (!packageId) {
                 return res.status(400).json({ message: 'packageId is required for upgrade' });
             }
@@ -249,7 +254,8 @@ exports.createVnpayTokenUrl = async (req, res, next) => {
             command,
             packageId,
             billingCycle: billingCycleNorm,
-            isUpgrade,
+            isUpgrade: upgradeFlag,
+            isTemporary,
             upgradeFromPackageId,
             creditValue,
         });
@@ -263,7 +269,8 @@ exports.createVnpayTokenUrl = async (req, res, next) => {
                         packageId,
                         billingCycle: billingCycleNorm,
                         amount: computedAmount,
-                        isUpgrade,
+                        isUpgrade: upgradeFlag,
+                        isTemporary,
                         upgradeFromPackageId,
                         creditValue
                     }
@@ -285,7 +292,7 @@ exports.createVnpayTokenUrl = async (req, res, next) => {
  */
 exports.createVnpayTokenPayUrl = async (req, res, next) => {
     try {
-        const { amount, orderInfo, token, userId, cardType = '01', bankCode, packageId, billingCycle, isUpgrade = false } = req.body;
+        const { amount, orderInfo, token, userId, cardType = '01', bankCode, packageId, billingCycle, isUpgrade = false, isTemporary = false } = req.body;
         if (!token) {
             return res.status(400).json({ message: 'token is required' });
         }
@@ -298,7 +305,9 @@ exports.createVnpayTokenPayUrl = async (req, res, next) => {
         let upgradeFromPackageId = null;
         let creditValue = 0;
 
-        if (isUpgrade) {
+        const upgradeFlag = isUpgrade || isTemporary;
+
+        if (upgradeFlag) {
             if (!packageId) {
                 return res.status(400).json({ message: 'packageId is required for upgrade' });
             }
@@ -335,7 +344,8 @@ exports.createVnpayTokenPayUrl = async (req, res, next) => {
             bankCode,
             billingCycle: billingCycleNorm,
             hasToken: !!token,
-            isUpgrade,
+            isUpgrade: upgradeFlag,
+            isTemporary,
         });
 
         const { vnpUrl, txnRef } = await vnpayService.createTokenUrl(req, {
@@ -348,7 +358,8 @@ exports.createVnpayTokenPayUrl = async (req, res, next) => {
             command: 'token_pay',
             packageId,
             billingCycle: billingCycleNorm,
-            isUpgrade,
+            isUpgrade: upgradeFlag,
+            isTemporary,
             upgradeFromPackageId,
             creditValue,
         });
@@ -361,7 +372,8 @@ exports.createVnpayTokenPayUrl = async (req, res, next) => {
                         packageId,
                         billingCycle: billingCycleNorm,
                         amount: computedAmount,
-                        isUpgrade,
+                        isUpgrade: upgradeFlag,
+                        isTemporary,
                         upgradeFromPackageId,
                         creditValue
                     }
