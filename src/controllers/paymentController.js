@@ -5,6 +5,7 @@ const PaymentTransaction = require('../models/PaymentTransaction');
 const PaymentToken = require('../models/PaymentToken');
 const MembershipPackage = require('../models/MembershipPackage');
 const { logInfo, logError } = require('../utils/logger');
+const mongoose = require('mongoose');
 
 const BILLING_CYCLE_MULTIPLIERS = {
     month: 1,
@@ -60,7 +61,15 @@ exports.createPaymentUrl = async (req, res, next) => {
                 return res.status(400).json({ message: 'packageId is required for upgrade' });
             }
             try {
-                const quote = await membershipService.calculateUpgradeQuote(userId, packageId, billingCycleNorm);
+                let quote;
+                if (isTemporary) {
+                    // Dùng logic tính giá riêng cho nâng cấp tạm thời (chỉ trừ credit phần overlap)
+                    quote = await membershipService.calculateTemporaryUpgradeQuote(userId, packageId, billingCycleNorm);
+                } else {
+                    // Dùng logic nâng cấp vĩnh viễn (trừ hết credit còn lại)
+                    quote = await membershipService.calculateUpgradeQuote(userId, packageId, billingCycleNorm);
+                }
+                
                 computedAmount = quote.amountDue;
                 billingCycleNorm = quote.billingCycle;
                 upgradeFromPackageId = quote.upgradeFromPackageId;

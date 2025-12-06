@@ -134,6 +134,93 @@ exports.calculateUpgradeQuote = async (userId, targetPackageId, billingCycle = '
 };
 
 /**
+ * Tính toán số tiền cần thanh toán cho nâng cấp TẠM THỜI (Trial/Experience)
+ * Logic: Chỉ khấu hao phần giá trị của gói cũ tương ứng với thời gian của gói mới (overlap)
+ * Ví dụ: Đang dùng Basic 1 năm (10k/ngày). Mua Premium 1 tháng (30 ngày).
+ * Credit = 10k * 30 = 300k (chứ không phải tính hết cả năm còn lại)
+ */
+exports.calculateTemporaryUpgradeQuote = async (userId, targetPackageId, billingCycle = 'month') => {
+  const user = await User.findById(userId).populate('membership.packageId');
+  const targetPkg = await findPackageByIdOrName(targetPackageId);
+
+  if (!user) throw new Error(`User not found: ${userId}`);
+  if (!targetPkg) throw new Error(`Package not found: ${targetPackageId}`);
+
+  const membership = user.membership;
+  // Nếu không có gói active, coi như mua mới hoàn toàn (không có credit)
+  if (!membership || membership.status !== 'active' || !membership.packageId) {
+    const cycle = normalizeBillingCycle(billingCycle);
+    const multiplier = BILLING_CYCLE_MULTIPLIERS[cycle] || 1;
+    const discount = BILLING_CYCLE_DISCOUNTS[cycle] || 0;
+    const base = targetPkg.price * multiplier;
+    const amount = Math.round(base * (1 - discount / 100));
+    
+    return {
+      amountDue: amount,
+      creditValue: 0,
+      targetPrice: amount,
+      billingCycle: cycle,
+      discount,
+      remainingDays: 0,
+      durationDays: (targetPkg.durationDays || 0) * multiplier,
+      package: {
+        current: null,
+        target: { id: targetPkg._id.toString(), name: targetPkg.name, price: targetPkg.price }
+      },
+      upgradeFromPackageId: null
+    };
+  }
+
+  const currentPkg = membership.packageId;
+  const now = new Date();
+  
+  // Tính giá gói đích
+  const cycle = normalizeBillingCycle(billingCycle);
+  const multiplier = BILLING_CYCLE_MULTIPLIERS[cycle] || 1;
+  const discount = BILLING_CYCLE_DISCOUNTS[cycle] || 0;
+  const baseTarget = targetPkg.price * multiplier;
+  const targetPrice = Math.round(baseTarget * (1 - discount / 100));
+  const targetDurationDays = (targetPkg.durationDays || 0) * multiplier;
+
+  // Tính giá trị khấu hao của gói hiện tại (chỉ tính trong khoảng thời gian overlap)
+  const dayMs = 24 * 60 * 60 * 1000;
+  const remainingDaysTotal = Math.max(0, Math.ceil((membership.endDate - now) / dayMs));
+  
+  // Số ngày được tính credit = Min(Số ngày còn lại của gói cũ, Thời hạn gói mới)
+  const overlapDays = Math.min(remainingDaysTotal, targetDurationDays);
+
+  const currentDuration = currentPkg.durationDays || 30;
+  const currentPerDay = (currentPkg.price || 0) / currentDuration;
+  const creditValue = Math.max(0, Math.round(currentPerDay * overlapDays));
+
+  const amountDue = Math.max(0, targetPrice - creditValue);
+
+  return {
+    amountDue,
+    creditValue,
+    targetPrice,
+    billingCycle: cycle,
+    discount,
+    remainingDays: remainingDaysTotal,
+    durationDays: targetDurationDays,
+    overlapDays,
+    package: {
+      current: {
+        id: currentPkg._id.toString(),
+        name: currentPkg.name,
+        price: currentPkg.price
+      },
+      target: {
+        id: targetPkg._id.toString(),
+        name: targetPkg.name,
+        price: targetPkg.price
+      }
+    },
+    upgradeFromPackageId: currentPkg._id.toString()
+  };
+};
+
+/**
  * Kích hoạt hoặc gia hạn gói tập cho user
  * @param {string} userId - ID của user
  * @param {string} packageId - ID của gói tập
@@ -163,11 +250,21 @@ exports.activateMembership = async (userId, packageId, transactionId, billingCyc
     let newEndDate = new Date();
 
     // Logic cộng dồn ngày
+    const isSamePackage = user.membership?.packageId?.toString() === pkg._id.toString();
+
     if (user.membership && user.membership.status === 'active' && user.membership.endDate > now) {
-      // Nếu đang còn hạn, cộng nối tiếp vào ngày hết hạn cũ
-      newStartDate = user.membership.startDate; // Giữ nguyên ngày bắt đầu gốc
-      newEndDate = new Date(user.membership.endDate);
-      newEndDate.setDate(newEndDate.getDate() + appliedDurationDays);
+      if (isSamePackage) {
+        // Nếu cùng gói và còn hạn: Cộng nối tiếp (Renewal)
+        newStartDate = user.membership.startDate;
+        newEndDate = new Date(user.membership.endDate);
+        newEndDate.setDate(newEndDate.getDate() + appliedDurationDays);
+      } else {
+        // Nếu khác gói: Reset ngày bắt đầu từ hôm nay (Start New)
+        // Lưu ý: Nếu muốn bảo lưu giá trị cũ, client phải dùng API upgradeMembership
+        newStartDate = now;
+        newEndDate = new Date(now);
+        newEndDate.setDate(newEndDate.getDate() + appliedDurationDays);
+      }
     } else {
       // Nếu đã hết hạn hoặc chưa có gói, tính từ hôm nay
       newStartDate = now;
