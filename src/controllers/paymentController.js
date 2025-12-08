@@ -219,7 +219,12 @@ exports.createVnpayTokenUrl = async (req, res, next) => {
                 return res.status(400).json({ message: 'packageId is required for upgrade' });
             }
             try {
-                const quote = await membershipService.calculateUpgradeQuote(userId, packageId, billingCycleNorm);
+                let quote;
+                if (isTemporary) {
+                    quote = await membershipService.calculateTemporaryUpgradeQuote(userId, packageId, billingCycleNorm);
+                } else {
+                    quote = await membershipService.calculateUpgradeQuote(userId, packageId, billingCycleNorm);
+                }
                 computedAmount = quote.amountDue;
                 billingCycleNorm = quote.billingCycle;
                 upgradeFromPackageId = quote.upgradeFromPackageId;
@@ -321,7 +326,12 @@ exports.createVnpayTokenPayUrl = async (req, res, next) => {
                 return res.status(400).json({ message: 'packageId is required for upgrade' });
             }
             try {
-                const quote = await membershipService.calculateUpgradeQuote(userId, packageId, billingCycleNorm);
+                let quote;
+                if (isTemporary) {
+                    quote = await membershipService.calculateTemporaryUpgradeQuote(userId, packageId, billingCycleNorm);
+                } else {
+                    quote = await membershipService.calculateUpgradeQuote(userId, packageId, billingCycleNorm);
+                }
                 computedAmount = quote.amountDue;
                 billingCycleNorm = quote.billingCycle;
                 upgradeFromPackageId = quote.upgradeFromPackageId;
