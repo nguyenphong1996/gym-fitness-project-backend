@@ -108,3 +108,15 @@ exports.togglePackageStatus = async (req, res) => {
     return res.status(500).json({ success: false, message: 'Failed to toggle status' });
   }
 };
+
+exports.listPublicPackages = async (req, res) => {
+  try {
+    const packages = await MembershipPackage.find({ isActive: true }).sort({ price: 1 });
+    return res.json({
+      success: true,
+      data: packages,
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: 'Failed to list packages' });
+  }
+};

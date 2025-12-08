@@ -32,6 +32,7 @@ var customerVideoFavoritesRouter = require('./src/routes/customerVideoFavorites'
 var staffClassAttendanceRouter = require('./src/routes/staffClassAttendance');
 var paymentRouter = require('./src/routes/payment'); // Added for VNPAY
 var packageRouter = require('./src/routes/package'); // Added for Membership Packages
+var publicPackagesRouter = require('./src/routes/packages');
 var facilityRouter = require('./src/routes/facility'); // Added for Facility Access
 var adminFacilityRouter = require('./src/routes/adminFacility'); // Added for Admin Facility Management
 
@@ -148,6 +149,7 @@ app.use('/api/customer/pt', customerPtBookingRouter);
 app.use('/api/customer', enrollmentRouter);
 app.use('/api/v1/payment', paymentRouter); // Added for VNPAY
 app.use('/api/admin/packages', packageRouter); // Added for Membership Packages
+app.use('/api/packages', publicPackagesRouter);
 app.use('/api/customer/facility', facilityRouter); // Added for Facility Access
 app.use('/api/admin/facilities', adminFacilityRouter); // Added for Admin Facility Management
 

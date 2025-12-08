@@ -192,20 +192,22 @@ router.get('/membership', authMiddleware, userController.getMembership);
 
 /**
  * @swagger
- * /api/user/membership/upgrade/quote:
- *   get:
+ * /api/user/membership/quote:
+ *   post:
  *     summary: Tính phí nâng cấp gói (trừ giá trị còn lại của gói hiện tại)
  *     tags: [User]
  *     security:
  *       - bearerAuth: []
- *     parameters:
- *       - in: query
- *         name: packageId
- *         required: true
- *         schema: { type: string }
- *       - in: query
- *         name: billingCycle
- *         schema: { type: string, enum: [month, quarter, year], default: month }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [packageId]
+ *             properties:
+ *               packageId: { type: string }
+ *               billingCycle: { type: string, enum: [month, quarter, year], default: month }
  *     responses:
  *       200:
  *         description: Trả về số tiền cần thanh toán sau khi trừ giá trị còn lại
@@ -214,7 +216,7 @@ router.get('/membership', authMiddleware, userController.getMembership);
  *       404:
  *         description: User hoặc package không tồn tại
  */
-router.get('/membership/upgrade/quote', authMiddleware, userController.getUpgradeQuote);
+router.post('/membership/quote', authMiddleware, userController.getUpgradeQuote);
 
 /**
  * @swagger

@@ -131,7 +131,7 @@ exports.getMembership = async (req, res) => {
 exports.getUpgradeQuote = async (req, res) => {
   const context = 'userController.getUpgradeQuote';
   try {
-    const { packageId, billingCycle } = req.query;
+    const { packageId, billingCycle } = req.body;
     if (!packageId) {
       return res.status(400).json({ error: 'missing_package_id', message: 'packageId is required' });
     }
