@@ -91,10 +91,7 @@ exports.createPaymentUrl = async (req, amount, orderInfo, bankCode, cardType, op
     let createDate = moment(date).format('YYYYMMDDHHmmss');
     let orderId = buildTxnRef();
 
-    let ipAddr = req.headers['x-forwarded-for'] ||
-        req.connection.remoteAddress ||
-        req.socket.remoteAddress ||
-        req.connection.socket.remoteAddress;
+    let ipAddr = getClientIp(req);
 
     let tmnCode = process.env.VNP_TMNCODE;
     let secretKey = process.env.VNP_HASHSECRET;
