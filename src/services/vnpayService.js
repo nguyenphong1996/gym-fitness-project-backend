@@ -114,7 +114,7 @@ exports.createPaymentUrl = async (req, amount, orderInfo, bankCode, cardType, op
     vnp_Params['vnp_ReturnUrl'] = returnUrl;
     vnp_Params['vnp_IpAddr'] = ipAddr;
     vnp_Params['vnp_CreateDate'] = createDate;
-    if(bankCode !== null && bankCode !== ''){
+    if (bankCode) {
         vnp_Params['vnp_BankCode'] = bankCode;
     }
     if(cardType){

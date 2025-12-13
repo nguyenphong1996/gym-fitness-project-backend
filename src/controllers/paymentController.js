@@ -27,11 +27,11 @@ const normalizeBillingCycle = (cycle = 'month') => {
 };
 
 const computePackageAmount = async (packageId, billingCycle) => {
-    // Check if packageId is a valid ObjectId, otherwise query by name
+    // Check if packageId is a valid ObjectId, otherwise query by name (case-insensitive)
     const isObjectId = mongoose.Types.ObjectId.isValid(packageId);
     const pkg = isObjectId
         ? await MembershipPackage.findById(packageId)
-        : await MembershipPackage.findOne({ name: packageId });
+        : await MembershipPackage.findOne({ name: { $regex: new RegExp(`^${packageId}$`, 'i') } });
 
     if (!pkg) {
         const err = new Error('Package not found');
