@@ -4,6 +4,68 @@ const { logError, logSuccess } = require('../utils/logger');
 
 const ALLOWED_SLOT_KEYS = new Set(SLOT_DEFINITIONS.map((slot) => slot.key));
 
+// 🚀 THÊM MỚI: Validation thời gian cho slots
+const isSlotTimeValid = (slotKey, checkDate = new Date()) => {
+  const now = new Date();
+  const [startTime, endTime] = slotKey.split('-');
+  const [startHour, startMinute] = startTime.split(':').map(Number);
+  const [endHour, endMinute] = endTime.split(':').map(Number);
+
+  // Parse check date
+  const checkDateTime = new Date(checkDate);
+  checkDateTime.setHours(0, 0, 0, 0);
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  // Chỉ validate nếu check date là ngày hôm nay
+  if (checkDateTime.getTime() !== today.getTime()) {
+    return { isValid: true, reason: null };
+  }
+
+  // Tạo datetime objects cho slot
+  const slotStart = new Date(today.getFullYear(), today.getMonth(), today.getDate(), startHour, startMinute);
+  const slotEnd = new Date(today.getFullYear(), today.getMonth(), today.getDate(), endHour, endMinute);
+
+  if (now >= slotEnd) {
+    return { 
+      isValid: false, 
+      reason: `Ca ${slotKey} đã kết thúc lúc ${endTime}` 
+    };
+  }
+
+  if (now >= slotStart) {
+    return { 
+      isValid: false, 
+      reason: `Ca ${slotKey} đã bắt đầu lúc ${startTime}` 
+    };
+  }
+
+  return { isValid: true, reason: null };
+};
+
+// 🚀 THÊM MỚI: Validate toàn bộ array slots
+const validateSlotsArray = (slots, date) => {
+  const invalidSlots = [];
+  
+  for (const slot of slots) {
+    const timeCheck = isSlotTimeValid(slot, date);
+    if (!timeCheck.isValid) {
+      invalidSlots.push({
+        slot,
+        reason: timeCheck.reason
+      });
+    }
+  }
+
+  if (invalidSlots.length > 0) {
+    const errorMessages = invalidSlots.map(item => `${item.slot}: ${item.reason}`).join(', ');
+    throw new Error(`Các ca không hợp lệ: ${errorMessages}`);
+  }
+
+  return true;
+};
+
 exports.getMyAvailability = async (req, res) => {
   const context = 'staffAvailabilityController.getMyAvailability';
   try {
@@ -72,6 +134,16 @@ exports.setMyAvailability = async (req, res) => {
       return res.status(400).json({
         error: 'invalid_slot_keys',
         message: `Invalid slot keys: ${invalidSlots.join(', ')}`
+      });
+    }
+
+    // 🚀 THÊM MỚI: Validate thời gian cho slots
+    try {
+      validateSlotsArray(uniqueSlots, normalizedDate);
+    } catch (timeValidationError) {
+      return res.status(400).json({
+        error: 'invalid_slot_time',
+        message: timeValidationError.message
       });
     }
 
