@@ -280,16 +280,25 @@ exports.activateMembership = async (userId, packageId, transactionId, billingCyc
 
     // Logic cộng dồn ngày
     const isSamePackage = user.membership?.packageId?.toString() === pkg._id.toString();
+    
+    // Lấy thông tin gói hiện tại để so sánh tier
+    let currentPkg = null;
+    if (user.membership?.packageId) {
+      if (user.membership.packageId.tier !== undefined) {
+        currentPkg = user.membership.packageId;
+      } else {
+        currentPkg = await MembershipPackage.findById(user.membership.packageId);
+      }
+    }
 
     if (user.membership && user.membership.status === 'active' && user.membership.endDate > now) {
-      if (isSamePackage) {
-        // Nếu cùng gói và còn hạn: Cộng nối tiếp (Renewal)
-        newStartDate = user.membership.startDate;
+      if (isSamePackage || (currentPkg && currentPkg.tier === pkg.tier)) {
+        // Cùng gói hoặc cùng tier: Cộng dồn thời gian
+        newStartDate = user.membership.startDate; // Giữ startDate của gói hiện tại
         newEndDate = new Date(user.membership.endDate);
         newEndDate.setDate(newEndDate.getDate() + appliedDurationDays);
       } else {
-        // Nếu khác gói: Reset ngày bắt đầu từ hôm nay (Start New)
-        // Lưu ý: Nếu muốn bảo lưu giá trị cũ, client phải dùng API upgradeMembership
+        // Khác gói và khác tier: Thay thế hoàn toàn (nâng cấp)
         newStartDate = now;
         newEndDate = new Date(now);
         newEndDate.setDate(newEndDate.getDate() + appliedDurationDays);
@@ -458,9 +467,22 @@ exports.upgradeMembershipTemporary = async (userId, targetPackageId, transaction
 
     const cycle = quote.billingCycle || normalizeBillingCycle(billingCycle);
     const multiplier = BILLING_CYCLE_MULTIPLIERS[cycle] || 1;
+    const appliedDurationDays = (targetPkg.durationDays || 0) * multiplier;
     const now = new Date();
-    const tempEndDate = new Date(now);
-    tempEndDate.setDate(tempEndDate.getDate() + (targetPkg.durationDays || 0) * multiplier);
+
+    // SỬA LỖI: Cộng dồn thời gian thay vì reset về 0
+    let newStartDate, tempEndDate;
+    if (user.membership && user.membership.status === 'active' && user.membership.endDate > now) {
+      // Có membership active: Cộng dồn từ endDate hiện tại
+      newStartDate = user.membership.startDate; // Giữ startDate của gói hiện tại
+      tempEndDate = new Date(user.membership.endDate);
+      tempEndDate.setDate(tempEndDate.getDate() + appliedDurationDays);
+    } else {
+      // Không có membership hoặc đã hết hạn: Tính từ hôm nay
+      newStartDate = now;
+      tempEndDate = new Date(now);
+      tempEndDate.setDate(tempEndDate.getDate() + appliedDurationDays);
+    }
 
     const newSessions = (targetPkg.sessionCount || 0) * multiplier;
     const newClassCredits =
@@ -470,7 +492,7 @@ exports.upgradeMembershipTemporary = async (userId, targetPackageId, transaction
 
     user.membership = {
       packageId: targetPkg._id,
-      startDate: now,
+      startDate: newStartDate,
       endDate: tempEndDate,
       remainingSessions: newSessions,
       remainingClassCredits: newClassCredits,
