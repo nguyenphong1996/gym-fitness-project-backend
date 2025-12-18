@@ -174,6 +174,37 @@ exports.calculateTemporaryUpgradeQuote = async (userId, targetPackageId, billing
   const currentPkg = membership.packageId;
   const now = new Date();
   
+  // KIỂM TRA: Nếu chọn cùng gói -> coi như gia hạn, trả tiền đủ
+  const isSamePackage = currentPkg._id.toString() === targetPkg._id.toString();
+  if (isSamePackage) {
+    const cycle = normalizeBillingCycle(billingCycle);
+    const multiplier = BILLING_CYCLE_MULTIPLIERS[cycle] || 1;
+    const discount = BILLING_CYCLE_DISCOUNTS[cycle] || 0;
+    const base = targetPkg.price * multiplier;
+    const amount = Math.round(base * (1 - discount / 100));
+    
+    return {
+      amountDue: amount,  // Gia hạn: trả đủ tiền
+      creditValue: 0,
+      targetPrice: amount,
+      currentCyclePrice: 0,
+      billingCycle: cycle,
+      discount,
+      remainingDays: 0,
+      durationDays: (targetPkg.durationDays || 0) * multiplier,
+      package: {
+        current: {
+          id: currentPkg._id.toString(),
+          name: currentPkg.name,
+          price: currentPkg.price
+        },
+        target: { id: targetPkg._id.toString(), name: targetPkg.name, price: targetPkg.price }
+      },
+      upgradeFromPackageId: null,
+      isRenewal: true
+    };
+  }
+  
   // Tính giá gói đích theo chu kỳ (đã áp dụng discount)
   const cycle = normalizeBillingCycle(billingCycle);
   const multiplier = BILLING_CYCLE_MULTIPLIERS[cycle] || 1;
@@ -270,19 +301,12 @@ exports.activateMembership = async (userId, packageId, transactionId, billingCyc
       newEndDate.setDate(newEndDate.getDate() + appliedDurationDays);
     }
 
-    // Logic cộng dồn số buổi PT (nếu có)
-    let currentSessions = user.membership?.remainingSessions || 0;
-    // Nếu gói cũ đã hết hạn, có thể reset session cũ về 0 hoặc bảo lưu tùy chính sách. 
-    // Ở đây tạm thời bảo lưu nếu status = active, nếu expired thì reset? 
-    // Để đơn giản cho Giai đoạn 1: Cộng dồn bất kể trạng thái (khuyến khích mua thêm)
-    const newSessions = currentSessions + packageSessionCount;
-
-    // Logic cộng dồn lượt class (quota). Nếu classQuota = null/undefined => không giới hạn.
-    const currentClassCredits = user.membership?.remainingClassCredits ?? 0;
-    const newClassCredits =
-      packageClassQuota === null || packageClassQuota === undefined
-        ? null
-        : currentClassCredits + packageClassQuota;
+    // Logic reset sessions và class credits (không cộng dồn)
+    // Các gói ưu đãi Plus/Premium sẽ reset về giá trị mặc định mỗi tháng
+    const newSessions = packageSessionCount; // Reset về giá trị gói mới
+    
+    // Class credits: reset về giá trị mặc định của gói (không cộng dồn)
+    const newClassCredits = packageClassQuota;
 
     // Cập nhật User
     user.membership = {
