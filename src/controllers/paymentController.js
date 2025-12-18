@@ -360,6 +360,18 @@ exports.createVnpayTokenPayUrl = async (req, res, next) => {
             return res.status(400).json({ message: 'amount is required' });
         }
 
+        // DEBUG: Log để fix vấn đề VNPAY hiển thị 0đ
+        console.log('DEBUG createVnpayTokenPayUrl:', {
+            originalAmount: amount,
+            computedAmount,
+            quoteAmountDue: computedAmount, // computedAmount từ quote.amountDue
+            isUpgrade: upgradeFlag,
+            isTemporary,
+            userId,
+            packageId,
+            token: token ? 'exists' : 'none'
+        });
+        
         logInfo('paymentController.createVnpayTokenPayUrl', 'Tạo URL VNPAY token_pay', {
             userId,
             amount: computedAmount,
