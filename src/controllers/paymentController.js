@@ -58,6 +58,8 @@ exports.createPaymentUrl = async (req, res, next) => {
 
         const upgradeFlag = isUpgrade || isTemporary;
 
+        // ƯU TIÊN SỬ DỤNG AMOUNT TỪ FRONTEND ĐỂ TRÁNH VNPAY HIỂN THỊ 0Đ
+        // Chỉ tính lại khi cần thiết hoặc amount không hợp lệ
         if (upgradeFlag) {
             if (!userId) {
                 return res.status(400).json({ message: 'userId is required for upgrade' });
@@ -65,23 +67,44 @@ exports.createPaymentUrl = async (req, res, next) => {
             if (!packageId) {
                 return res.status(400).json({ message: 'packageId is required for upgrade' });
             }
-            try {
-                let quote;
-                if (isTemporary) {
-                    // Dùng logic tính giá riêng cho nâng cấp tạm thời (chỉ trừ credit phần overlap)
-                    quote = await membershipService.calculateTemporaryUpgradeQuote(userId, packageId, billingCycleNorm);
-                } else {
-                    // Dùng logic nâng cấp vĩnh viễn (trừ hết credit còn lại)
-                    quote = await membershipService.calculateUpgradeQuote(userId, packageId, billingCycleNorm);
+            // Sử dụng amount từ frontend nếu hợp lệ, chỉ tính quote để lấy metadata
+            if (amount && amount > 0) {
+                computedAmount = amount;
+                try {
+                    let quote;
+                    if (isTemporary) {
+                        // Dùng logic tính giá riêng cho nâng cấp tạm thời (chỉ trừ credit phần overlap)
+                        quote = await membershipService.calculateTemporaryUpgradeQuote(userId, packageId, billingCycleNorm);
+                    } else {
+                        // Dùng logic nâng cấp vĩnh viễn (trừ hết credit còn lại)
+                        quote = await membershipService.calculateUpgradeQuote(userId, packageId, billingCycleNorm);
+                    }
+                    billingCycleNorm = quote.billingCycle;
+                    upgradeFromPackageId = quote.upgradeFromPackageId;
+                    creditValue = quote.creditValue;
+                } catch (err) {
+                    console.warn('Failed to get upgrade quote metadata:', err.message);
+                    // Vẫn tiếp tục với computedAmount từ frontend
                 }
-                
-                computedAmount = quote.amountDue;
-                billingCycleNorm = quote.billingCycle;
-                upgradeFromPackageId = quote.upgradeFromPackageId;
-                creditValue = quote.creditValue;
-            } catch (err) {
-                const status = err.status || 500;
-                return res.status(status).json({ message: err.message || 'Failed to calculate upgrade price', error: err.code || 'server_error' });
+            } else {
+                // Fallback: tính quote đầy đủ nếu không có amount từ frontend
+                try {
+                    let quote;
+                    if (isTemporary) {
+                        // Dùng logic tính giá riêng cho nâng cấp tạm thời (chỉ trừ credit phần overlap)
+                        quote = await membershipService.calculateTemporaryUpgradeQuote(userId, packageId, billingCycleNorm);
+                    } else {
+                        // Dùng logic nâng cấp vĩnh viễn (trừ hết credit còn lại)
+                        quote = await membershipService.calculateUpgradeQuote(userId, packageId, billingCycleNorm);
+                    }
+                    computedAmount = quote.amountDue;
+                    billingCycleNorm = quote.billingCycle;
+                    upgradeFromPackageId = quote.upgradeFromPackageId;
+                    creditValue = quote.creditValue;
+                } catch (err) {
+                    const status = err.status || 500;
+                    return res.status(status).json({ message: err.message || 'Failed to calculate upgrade price', error: err.code || 'server_error' });
+                }
             }
         } else if (packageId) {
             try {
@@ -219,24 +242,46 @@ exports.createVnpayTokenUrl = async (req, res, next) => {
 
         const upgradeFlag = isUpgrade || isTemporary;
 
+        // ƯU TIÊN SỬ DỤNG AMOUNT TỪ FRONTEND ĐỂ TRÁNH VNPAY HIỂN THỊ 0Đ
+        // Chỉ tính lại khi cần thiết hoặc amount không hợp lệ
         if (upgradeFlag) {
             if (!packageId) {
                 return res.status(400).json({ message: 'packageId is required for upgrade' });
             }
-            try {
-                let quote;
-                if (isTemporary) {
-                    quote = await membershipService.calculateTemporaryUpgradeQuote(userId, packageId, billingCycleNorm);
-                } else {
-                    quote = await membershipService.calculateUpgradeQuote(userId, packageId, billingCycleNorm);
+            // Sử dụng amount từ frontend nếu hợp lệ, chỉ tính quote để lấy metadata
+            if (amount && amount > 0) {
+                computedAmount = amount;
+                try {
+                    let quote;
+                    if (isTemporary) {
+                        quote = await membershipService.calculateTemporaryUpgradeQuote(userId, packageId, billingCycleNorm);
+                    } else {
+                        quote = await membershipService.calculateUpgradeQuote(userId, packageId, billingCycleNorm);
+                    }
+                    billingCycleNorm = quote.billingCycle;
+                    upgradeFromPackageId = quote.upgradeFromPackageId;
+                    creditValue = quote.creditValue;
+                } catch (err) {
+                    console.warn('Failed to get upgrade quote metadata:', err.message);
+                    // Vẫn tiếp tục với computedAmount từ frontend
                 }
-                computedAmount = quote.amountDue;
-                billingCycleNorm = quote.billingCycle;
-                upgradeFromPackageId = quote.upgradeFromPackageId;
-                creditValue = quote.creditValue;
-            } catch (err) {
-                const status = err.status || 500;
-                return res.status(status).json({ message: err.message || 'Failed to calculate upgrade price', error: err.code || 'server_error' });
+            } else {
+                // Fallback: tính quote đầy đủ nếu không có amount từ frontend
+                try {
+                    let quote;
+                    if (isTemporary) {
+                        quote = await membershipService.calculateTemporaryUpgradeQuote(userId, packageId, billingCycleNorm);
+                    } else {
+                        quote = await membershipService.calculateUpgradeQuote(userId, packageId, billingCycleNorm);
+                    }
+                    computedAmount = quote.amountDue;
+                    billingCycleNorm = quote.billingCycle;
+                    upgradeFromPackageId = quote.upgradeFromPackageId;
+                    creditValue = quote.creditValue;
+                } catch (err) {
+                    const status = err.status || 500;
+                    return res.status(status).json({ message: err.message || 'Failed to calculate upgrade price', error: err.code || 'server_error' });
+                }
             }
         } else if (packageId) {
             try {
@@ -326,24 +371,46 @@ exports.createVnpayTokenPayUrl = async (req, res, next) => {
 
         const upgradeFlag = isUpgrade || isTemporary;
 
+        // ƯU TIÊN SỬ DỤNG AMOUNT TỪ FRONTEND ĐỂ TRÁNH VNPAY HIỂN THỊ 0Đ
+        // Chỉ tính lại khi cần thiết hoặc amount không hợp lệ
         if (upgradeFlag) {
             if (!packageId) {
                 return res.status(400).json({ message: 'packageId is required for upgrade' });
             }
-            try {
-                let quote;
-                if (isTemporary) {
-                    quote = await membershipService.calculateTemporaryUpgradeQuote(userId, packageId, billingCycleNorm);
-                } else {
-                    quote = await membershipService.calculateUpgradeQuote(userId, packageId, billingCycleNorm);
+            // Sử dụng amount từ frontend nếu hợp lệ, chỉ tính quote để lấy metadata
+            if (amount && amount > 0) {
+                computedAmount = amount;
+                try {
+                    let quote;
+                    if (isTemporary) {
+                        quote = await membershipService.calculateTemporaryUpgradeQuote(userId, packageId, billingCycleNorm);
+                    } else {
+                        quote = await membershipService.calculateUpgradeQuote(userId, packageId, billingCycleNorm);
+                    }
+                    billingCycleNorm = quote.billingCycle;
+                    upgradeFromPackageId = quote.upgradeFromPackageId;
+                    creditValue = quote.creditValue;
+                } catch (err) {
+                    console.warn('Failed to get upgrade quote metadata:', err.message);
+                    // Vẫn tiếp tục với computedAmount từ frontend
                 }
-                computedAmount = quote.amountDue;
-                billingCycleNorm = quote.billingCycle;
-                upgradeFromPackageId = quote.upgradeFromPackageId;
-                creditValue = quote.creditValue;
-            } catch (err) {
-                const status = err.status || 500;
-                return res.status(status).json({ message: err.message || 'Failed to calculate upgrade price', error: err.code || 'server_error' });
+            } else {
+                // Fallback: tính quote đầy đủ nếu không có amount từ frontend
+                try {
+                    let quote;
+                    if (isTemporary) {
+                        quote = await membershipService.calculateTemporaryUpgradeQuote(userId, packageId, billingCycleNorm);
+                    } else {
+                        quote = await membershipService.calculateUpgradeQuote(userId, packageId, billingCycleNorm);
+                    }
+                    computedAmount = quote.amountDue;
+                    billingCycleNorm = quote.billingCycle;
+                    upgradeFromPackageId = quote.upgradeFromPackageId;
+                    creditValue = quote.creditValue;
+                } catch (err) {
+                    const status = err.status || 500;
+                    return res.status(status).json({ message: err.message || 'Failed to calculate upgrade price', error: err.code || 'server_error' });
+                }
             }
         } else if (packageId) {
             try {
