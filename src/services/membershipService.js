@@ -259,7 +259,7 @@ exports.calculateTemporaryUpgradeQuote = async (userId, targetPackageId, billing
 exports.activateMembership = async (userId, packageId, transactionId, billingCycle = 'month') => {
   const context = 'membershipService.activateMembership';
   try {
-    const user = await User.findById(userId);
+    const user = await User.findById(userId).populate('membership.packageId');
     const pkg = await findPackageByIdOrName(packageId);
 
     if (!user) throw new Error(`User not found: ${userId}`);
@@ -278,18 +278,9 @@ exports.activateMembership = async (userId, packageId, transactionId, billingCyc
     let newStartDate = now;
     let newEndDate = new Date();
 
-    // Logic cộng dồn ngày
-    const isSamePackage = user.membership?.packageId?.toString() === pkg._id.toString();
-    
-    // Lấy thông tin gói hiện tại để so sánh tier
-    let currentPkg = null;
-    if (user.membership?.packageId) {
-      if (user.membership.packageId.tier !== undefined) {
-        currentPkg = user.membership.packageId;
-      } else {
-        currentPkg = await MembershipPackage.findById(user.membership.packageId);
-      }
-    }
+    // Logic cộng dồn ngày - SỬA: So sánh chính xác cùng gói
+    const isSamePackage = user.membership?.packageId?._id?.toString() === pkg._id.toString();
+    const currentPkg = user.membership?.packageId || null;
 
     if (user.membership && user.membership.status === 'active' && user.membership.endDate > now) {
       if (isSamePackage || (currentPkg && currentPkg.tier === pkg.tier)) {
