@@ -369,7 +369,9 @@ exports.createVnpayTokenPayUrl = async (req, res, next) => {
             isTemporary,
             userId,
             packageId,
-            token: token ? 'exists' : 'none'
+            token: token ? 'exists' : 'none',
+            hasPackageId: !!packageId,
+            flow: upgradeFlag ? 'upgrade' : (packageId ? 'package' : 'amount')
         });
         
         logInfo('paymentController.createVnpayTokenPayUrl', 'Tạo URL VNPAY token_pay', {
