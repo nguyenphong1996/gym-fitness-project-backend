@@ -134,10 +134,9 @@ exports.calculateUpgradeQuote = async (userId, targetPackageId, billingCycle = '
 };
 
 /**
- * Tính toán số tiền cần thanh toán cho nâng cấp TẠM THỜI (Trial/Experience)
- * Logic: Chỉ khấu hao phần giá trị của gói cũ tương ứng với thời gian của gói mới (overlap)
- * Ví dụ: Đang dùng Basic 1 năm (10k/ngày). Mua Premium 1 tháng (30 ngày).
- * Credit = 10k * 30 = 300k (chứ không phải tính hết cả năm còn lại)
+ * Tính toán số tiền cần thanh toán cho nâng cấp TẠM THỜI
+ * Logic: Chênh lệch giá 2 gói CÙNG CHU KỲ
+ * Ví dụ: Plus quý (2136k) - Basic quý (1176k) = 960k
  */
 exports.calculateTemporaryUpgradeQuote = async (userId, targetPackageId, billingCycle = 'month') => {
   const user = await User.findById(userId).populate('membership.packageId');
@@ -159,6 +158,7 @@ exports.calculateTemporaryUpgradeQuote = async (userId, targetPackageId, billing
       amountDue: amount,
       creditValue: 0,
       targetPrice: amount,
+      currentCyclePrice: 0,
       billingCycle: cycle,
       discount,
       remainingDays: 0,
@@ -174,7 +174,7 @@ exports.calculateTemporaryUpgradeQuote = async (userId, targetPackageId, billing
   const currentPkg = membership.packageId;
   const now = new Date();
   
-  // Tính giá gói đích
+  // Tính giá gói đích theo chu kỳ (đã áp dụng discount)
   const cycle = normalizeBillingCycle(billingCycle);
   const multiplier = BILLING_CYCLE_MULTIPLIERS[cycle] || 1;
   const discount = BILLING_CYCLE_DISCOUNTS[cycle] || 0;
@@ -182,28 +182,26 @@ exports.calculateTemporaryUpgradeQuote = async (userId, targetPackageId, billing
   const targetPrice = Math.round(baseTarget * (1 - discount / 100));
   const targetDurationDays = (targetPkg.durationDays || 0) * multiplier;
 
-  // Tính giá trị khấu hao của gói hiện tại (chỉ tính trong khoảng thời gian overlap)
+  // Tính giá gói hiện tại theo CÙNG chu kỳ (đã áp dụng discount)
+  const baseCurrent = currentPkg.price * multiplier;
+  const currentCyclePrice = Math.round(baseCurrent * (1 - discount / 100));
+
+  // Chênh lệch = Giá gói mới - Giá gói cũ (cùng chu kỳ)
+  const amountDue = Math.max(0, targetPrice - currentCyclePrice);
+
+  // Tính số ngày còn lại (chỉ để hiển thị, không ảnh hưởng tính tiền)
   const dayMs = 24 * 60 * 60 * 1000;
   const remainingDaysTotal = Math.max(0, Math.ceil((membership.endDate - now) / dayMs));
-  
-  // Số ngày được tính credit = Min(Số ngày còn lại của gói cũ, Thời hạn gói mới)
-  const overlapDays = Math.min(remainingDaysTotal, targetDurationDays);
-
-  const currentDuration = currentPkg.durationDays || 30;
-  const currentPerDay = (currentPkg.price || 0) / currentDuration;
-  const creditValue = Math.max(0, Math.round(currentPerDay * overlapDays));
-
-  const amountDue = Math.max(0, targetPrice - creditValue);
 
   return {
     amountDue,
-    creditValue,
+    creditValue: currentCyclePrice, // Giá trị gói cũ theo chu kỳ
     targetPrice,
+    currentCyclePrice,
     billingCycle: cycle,
     discount,
     remainingDays: remainingDaysTotal,
     durationDays: targetDurationDays,
-    overlapDays,
     package: {
       current: {
         id: currentPkg._id.toString(),
