@@ -419,7 +419,13 @@ exports.updateTransactionStatus = async ({ txnRef, rspCode, transactionStatus, p
         tx.token = normalizeField(params, ['vnp_token', 'vnp_Token']) || tx.token;
         // SỬA LỖI: Đảm bảo paidAt được set khi thành công
         if (isSuccess && !tx.paidAt) {
-            tx.paidAt = new Date();
+            const payDateStr = normalizeField(params, ['vnp_PayDate', 'vnp_pay_date']);
+            if (payDateStr) {
+                // VNPAY trả về yyyyMMddHHmmss
+                tx.paidAt = moment(payDateStr, 'YYYYMMDDHHmmss').toDate();
+            } else {
+                tx.paidAt = new Date();
+            }
         }
     }
 
@@ -519,6 +525,7 @@ exports.queryDr = async ({ txnRef, transactionDate }) => {
 };
 
 exports.vnpayIpn = async (req, res) => {
+    logInfo('vnpayService.vnpayIpn', 'VNPAY IPN Received', req.query);
     try {
         const verification = exports.verifyVnpayParams(req.query);
         if (!verification.isValid) {
