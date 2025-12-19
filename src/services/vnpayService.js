@@ -162,12 +162,25 @@ exports.vnpayReturn = async (req) => {
     const isSuccess = rspCode === '00' && transactionStatus === '00';
     await exports.updateTransactionStatus({ txnRef, rspCode, transactionStatus, params, source: 'return' });
 
-    return {
+    // SỬA LỖI: Thêm paidAt vào response để hiển thị thời gian chính xác
+    const response = {
         code: rspCode,
         message: isSuccess ? "Success" : "Failed",
         orderId: txnRef,
         amount: amount ? amount / 100 : undefined,
     };
+    
+    // Thêm paidAt từ transaction nếu có
+    if (isSuccess) {
+        const tx = await PaymentTransaction.findOne({ txnRef });
+        if (tx && tx.paidAt) {
+            response.paidAt = tx.paidAt.toISOString();
+        } else {
+            response.paidAt = new Date().toISOString();
+        }
+    }
+    
+    return response;
 };
 
 /**
@@ -404,7 +417,10 @@ exports.updateTransactionStatus = async ({ txnRef, rspCode, transactionStatus, p
         tx.bankCode = normalizeField(params, ['vnp_BankCode', 'vnp_bank_code']) || tx.bankCode;
         tx.cardType = normalizeField(params, ['vnp_card_type', 'vnp_CardType']) || tx.cardType;
         tx.token = normalizeField(params, ['vnp_token', 'vnp_Token']) || tx.token;
-        tx.paidAt = isSuccess ? (tx.paidAt || new Date()) : tx.paidAt;
+        // SỬA LỖI: Đảm bảo paidAt được set khi thành công
+        if (isSuccess && !tx.paidAt) {
+            tx.paidAt = new Date();
+        }
     }
 
     if (source === 'ipn') {
