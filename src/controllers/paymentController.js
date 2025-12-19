@@ -160,6 +160,12 @@ exports.vnpayReturn = async (req, res, next) => {
                     cleanResult[key] = result[key];
                 }
             });
+            
+            // SỬA LỖI: Thêm paidAt để hiển thị thời gian chính xác trong PaymentResultScreen
+            if (!cleanResult.paidAt) {
+                cleanResult.paidAt = new Date().toISOString();
+            }
+            
             const queryString = new URLSearchParams(cleanResult).toString();
             return res.redirect(`gymxfit://payment-result?${queryString}`);
         }
