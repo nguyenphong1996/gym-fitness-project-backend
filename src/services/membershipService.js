@@ -461,19 +461,11 @@ exports.upgradeMembershipTemporary = async (userId, targetPackageId, transaction
     const appliedDurationDays = (targetPkg.durationDays || 0) * multiplier;
     const now = new Date();
 
-    // SỬA LỖI: Cộng dồn thời gian thay vì reset về 0
-    let newStartDate, tempEndDate;
-    if (user.membership && user.membership.status === 'active' && user.membership.endDate > now) {
-      // Có membership active: Cộng dồn từ endDate hiện tại
-      newStartDate = user.membership.startDate; // Giữ startDate của gói hiện tại
-      tempEndDate = new Date(user.membership.endDate);
-      tempEndDate.setDate(tempEndDate.getDate() + appliedDurationDays);
-    } else {
-      // Không có membership hoặc đã hết hạn: Tính từ hôm nay
-      newStartDate = now;
-      tempEndDate = new Date(now);
-      tempEndDate.setDate(tempEndDate.getDate() + appliedDurationDays);
-    }
+    // Nâng cấp tạm thời: Gói mới có hiệu lực trong `appliedDurationDays` kể từ hôm nay.
+// Thời gian còn lại của gói cũ được lưu trong `backup` và sẽ được khôi phục sau.
+const newStartDate = user.membership?.startDate || now; // Giữ ngày bắt đầu gốc nếu có
+const tempEndDate = new Date(now);
+tempEndDate.setDate(tempEndDate.getDate() + appliedDurationDays);  // ✅ ĐÚNG!
 
     const newSessions = (targetPkg.sessionCount || 0) * multiplier;
     const newClassCredits =
