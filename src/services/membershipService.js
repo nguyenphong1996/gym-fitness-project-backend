@@ -85,7 +85,7 @@ exports.calculateUpgradeQuote = async (userId, targetPackageId, billingCycle = '
     throw err;
   }
 
-  // Không cho hạ cấp: so sánh tier (mặc định = 1 nếu thiếu)
+  // KIỂM TRA DOWNGRADE: So sánh với gói hiện tại (temporary nếu có)
   const currentTier = currentPkg.tier;
   const targetTier = targetPkg.tier;
   const hasTierInfo = currentTier !== undefined && targetTier !== undefined;
@@ -96,20 +96,80 @@ exports.calculateUpgradeQuote = async (userId, targetPackageId, billingCycle = '
     throw err;
   }
 
+  // KIỂM TRA KHI CÓ TEMPORARY: Target phải cao hơn BACKUP nữa
+  // Vì user đang có temporary + backup, không cho upgrade = hoặc < backup
+  if (user.membershipTemp?.isTemporary) {
+    const backupPkgId = user.membershipTemp.restoreTo?.packageId;
+    const backupPkg = backupPkgId?.name ? backupPkgId : await MembershipPackage.findById(backupPkgId);
+    
+    if (backupPkg) {
+      const backupTier = backupPkg.tier;
+      const hasBackupTierInfo = backupTier !== undefined && targetTier !== undefined;
+      
+      // Target phải cao hơn backup (không được bằng hoặc thấp hơn)
+      if (hasBackupTierInfo ? (targetTier <= backupTier) : ((targetPkg.price || 0) <= (backupPkg.price || 0))) {
+        const err = new Error('Cannot upgrade to a package equal or lower than backup package');
+        err.code = 'invalid_upgrade_with_temporary';
+        err.status = 400;
+        err.details = {
+          currentPackage: currentPkg.name,
+          backupPackage: backupPkg.name,
+          targetPackage: targetPkg.name
+        };
+        throw err;
+      }
+    }
+  }
+
   const { price: targetPrice, multiplier, discount, cycle } = calculatePackagePrice(targetPkg, billingCycle);
 
-  // Giá trị còn lại của gói hiện tại theo ngày - PHẢI DÙNG GIÁ ĐÃ DISCOUNT THEO BILLING CYCLE
   const dayMs = 24 * 60 * 60 * 1000;
-  const remainingDays = Math.max(0, Math.ceil((membership.endDate - now) / dayMs));
-  
-  // Lấy billing cycle mà user đã MUA (month/quarter/year)
-  const currentBillingCycle = membership.billingCycle || 'month';
-  const { price: currentPaidPrice, multiplier: currentMultiplier } = calculatePackagePrice(currentPkg, currentBillingCycle);
-  
-  // Tính credit dựa trên giá ĐÃ DISCOUNT và duration theo billing cycle
-  const currentDuration = (currentPkg.durationDays || 30) * currentMultiplier;
-  const currentPerDay = currentPaidPrice / currentDuration;
-  const creditValue = Math.max(0, Math.round(currentPerDay * remainingDays));
+  let creditValue = 0;
+  let remainingDays = 0;
+
+  // CASE 1: User đang có TEMPORARY upgrade active
+  if (user.membershipTemp?.isTemporary) {
+    // Tính credit từ GÓI TEMPORARY hiện tại (Premium/Plus đang dùng)
+    const tempPkg = membership.packageId?.name ? membership.packageId : await MembershipPackage.findById(membership.packageId);
+    const tempBillingCycle = membership.billingCycle || 'month';
+    const { price: tempPaidPrice, multiplier: tempMultiplier } = calculatePackagePrice(tempPkg, tempBillingCycle);
+    const tempDuration = (tempPkg.durationDays || 30) * tempMultiplier;
+    const tempRemainingDays = Math.max(0, Math.ceil((membership.endDate - now) / dayMs));
+    const tempPerDay = tempPaidPrice / tempDuration;
+    const tempCredit = Math.max(0, Math.round(tempPerDay * tempRemainingDays));
+
+    // Tính credit từ GÓI BACKUP (gói gốc sẽ restore về)
+    const backupPkgId = user.membershipTemp.restoreTo?.packageId;
+    const backupPkg = backupPkgId?.name ? backupPkgId : await MembershipPackage.findById(backupPkgId);
+    const backupBillingCycle = user.membershipTemp.restoreTo?.billingCycle || 'month';
+    const { price: backupPaidPrice, multiplier: backupMultiplier } = calculatePackagePrice(backupPkg, backupBillingCycle);
+    const backupDuration = (backupPkg.durationDays || 30) * backupMultiplier;
+    const backupEndDate = new Date(user.membershipTemp.restoreTo?.endDate || now);
+    const backupRemainingDays = Math.max(0, Math.ceil((backupEndDate - now) / dayMs));
+    const backupPerDay = backupPaidPrice / backupDuration;
+    const backupCredit = Math.max(0, Math.round(backupPerDay * backupRemainingDays));
+
+    // TỔNG CREDIT = Temporary + Backup
+    creditValue = tempCredit + backupCredit;
+    remainingDays = tempRemainingDays; // Hiển thị ngày temporary còn lại
+
+    logInfo('calculateUpgradeQuote', `User has temporary upgrade`, {
+      tempCredit,
+      tempRemainingDays,
+      backupCredit,
+      backupRemainingDays,
+      totalCredit: creditValue
+    });
+  } 
+  // CASE 2: User có gói PERMANENT thông thường
+  else {
+    remainingDays = Math.max(0, Math.ceil((membership.endDate - now) / dayMs));
+    const currentBillingCycle = membership.billingCycle || 'month';
+    const { price: currentPaidPrice, multiplier: currentMultiplier } = calculatePackagePrice(currentPkg, currentBillingCycle);
+    const currentDuration = (currentPkg.durationDays || 30) * currentMultiplier;
+    const currentPerDay = currentPaidPrice / currentDuration;
+    creditValue = Math.max(0, Math.round(currentPerDay * remainingDays));
+  }
 
   const amountDue = Math.max(0, targetPrice - creditValue);
   const durationDays = (targetPkg.durationDays || 0) * multiplier;
@@ -375,6 +435,17 @@ exports.upgradeMembership = async (userId, targetPackageId, transactionId, billi
         ? null
         : (targetPkg.classQuota || 0) * multiplier;
 
+    // XỬ LÝ TEMPORARY UPGRADE: Khi upgrade permanent, clear temporary
+    // User đã được tính credit từ CẢ HAI (temporary + backup) trong calculateUpgradeQuote
+    if (user.membershipTemp?.isTemporary) {
+      logInfo(context, `Clearing temporary upgrade for permanent upgrade`, {
+        userId,
+        tempPackage: user.membership.packageId?.toString?.(),
+        backupPackage: user.membershipTemp.restoreTo?.packageId?.toString?.()
+      });
+      user.membershipTemp = undefined;
+    }
+
     user.membership = {
       packageId: targetPkg._id,
       startDate: now,
@@ -410,24 +481,14 @@ const revertTempIfExpired = async (user) => {
   if (user.membershipTemp.endDate && user.membershipTemp.endDate <= now) {
     const restore = user.membershipTemp.restoreTo || {};
     
-    // QUAN TRỌNG: Trừ số ngày đã dùng temporary khỏi backup
-    // Vì user chỉ trả tiền CHÊNH LỆCH giữa 2 gói, không phải mua thêm thời gian
-    const tempStartDate = user.membershipTemp.startDate || now;
-    const dayMs = 24 * 60 * 60 * 1000;
-    const tempDaysUsed = Math.ceil((now - tempStartDate) / dayMs);
-    
-    // Tính endDate mới = endDate backup - số ngày đã dùng temporary
-    const originalEndDate = new Date(restore.endDate || now);
-    const adjustedEndDate = new Date(originalEndDate);
-    adjustedEndDate.setDate(adjustedEndDate.getDate() - tempDaysUsed);
-    
+    // Restore nguyên xi từ backup (đã được điều chỉnh khi tạo temporary)
     user.membership = {
       packageId: restore.packageId || null,
       startDate: restore.startDate || null,
-      endDate: adjustedEndDate,  // ← Trừ đi số ngày đã dùng temporary
+      endDate: restore.endDate || null,  // ← Đã được trừ khi tạo backup
       remainingSessions: restore.remainingSessions ?? 0,
       remainingClassCredits: restore.remainingClassCredits ?? 0,
-      status: adjustedEndDate > now ? 'active' : 'expired',
+      status: restore.endDate && restore.endDate > now ? 'active' : 'expired',
       billingCycle: restore.billingCycle || 'month',
       lastRenewalDate: restore.startDate || null
     };
@@ -480,10 +541,16 @@ exports.upgradeMembershipTemporary = async (userId, targetPackageId, transaction
     const now = new Date();
 
     // Nâng cấp tạm thời: Gói mới có hiệu lực trong `appliedDurationDays` kể từ hôm nay.
-// Thời gian còn lại của gói cũ được lưu trong `backup` và sẽ được khôi phục sau.
-const newStartDate = user.membership?.startDate || now; // Giữ ngày bắt đầu gốc nếu có
-const tempEndDate = new Date(now);
-tempEndDate.setDate(tempEndDate.getDate() + appliedDurationDays);  // ✅ ĐÚNG!
+    // Backup phải TRỪ ĐI số ngày temporary vì user đã "bán" phần đó cho trung tâm
+    const newStartDate = user.membership?.startDate || now;
+    const tempEndDate = new Date(now);
+    tempEndDate.setDate(tempEndDate.getDate() + appliedDurationDays);
+
+    // QUAN TRỌNG: Backup endDate phải trừ đi appliedDurationDays
+    // Vì user đã "bán" X ngày gói cũ và trả chênh lệch để lên gói mới X ngày
+    const adjustedBackupEndDate = new Date(backup.endDate);
+    adjustedBackupEndDate.setDate(adjustedBackupEndDate.getDate() - appliedDurationDays);
+    backup.endDate = adjustedBackupEndDate;
 
     const newSessions = (targetPkg.sessionCount || 0) * multiplier;
     const newClassCredits =
