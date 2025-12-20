@@ -510,16 +510,21 @@ const revertTempIfExpired = async (user) => {
   if (user.membershipTemp.endDate && user.membershipTemp.endDate <= now) {
     const restore = user.membershipTemp.restoreTo || {};
     
-    // Restore nguyên xi từ backup (đã được điều chỉnh khi tạo temporary)
+    // Lấy package info để renew sessions mới
+    const backupPkg = await MembershipPackage.findById(restore.packageId);
+    
+    // Restore về gói cũ NHƯNG:
+    // - startDate: GIỮ NGUYÊN từ membership hiện tại (đã đổi khi upgrade temporary)
+    // - sessions/credits: RENEW MỚI theo package (không dùng backup cũ)
     user.membership = {
       packageId: restore.packageId || null,
-      startDate: restore.startDate || null,
+      startDate: user.membership.startDate,  // ← GIỮ startDate hiện tại (ngày upgrade)
       endDate: restore.endDate || null,  // ← Đã được trừ khi tạo backup
-      remainingSessions: restore.remainingSessions ?? 0,
-      remainingClassCredits: restore.remainingClassCredits ?? 0,
+      remainingSessions: backupPkg?.sessionCount || 0,  // ← RENEW mới
+      remainingClassCredits: backupPkg?.classQuota === null ? null : (backupPkg?.classQuota || 0),  // ← RENEW mới
       status: restore.endDate && restore.endDate > now ? 'active' : 'expired',
       billingCycle: restore.billingCycle || 'month',
-      lastRenewalDate: restore.startDate || null
+      lastRenewalDate: now
     };
     user.membershipTemp = undefined;
     await user.save();
@@ -587,9 +592,10 @@ exports.upgradeMembershipTemporary = async (userId, targetPackageId, transaction
         ? null
         : (targetPkg.classQuota || 0) * multiplier;
 
+    // Đổi startDate sang ngày upgrade (renew theo ngày này)
     user.membership = {
       packageId: targetPkg._id,
-      startDate: newStartDate,
+      startDate: now,  // ← ĐỔI MỚI: Ngày upgrade = ngày renew mới
       endDate: tempEndDate,
       remainingSessions: newSessions,
       remainingClassCredits: newClassCredits,
@@ -650,4 +656,59 @@ exports.validateBookingEligibility = async (userId, type) => {
   }
 
   return { allowed: true };
+};
+
+/**
+ * Renew sessions và class credits hàng tháng theo ngày kích hoạt
+ * Chạy cronjob mỗi ngày để kiểm tra user nào cần renew
+ */
+exports.renewMonthlySessions = async () => {
+  const context = 'membershipService.renewMonthlySessions';
+  try {
+    const now = new Date();
+    const today = now.getDate(); // Ngày trong tháng (1-31)
+    
+    // Tìm users có membership active và ngày renew = hôm nay
+    const users = await User.find({
+      'membership.status': 'active',
+      'membership.endDate': { $gte: now }
+    }).populate('membership.packageId');
+
+    let renewedCount = 0;
+
+    for (const user of users) {
+      if (!user.membership?.packageId) continue;
+
+      const pkg = user.membership.packageId;
+      const startDate = new Date(user.membership.startDate);
+      const renewDay = startDate.getDate(); // Ngày renew theo ngày activate
+
+      // Check nếu hôm nay là ngày renew
+      // Xử lý trường hợp tháng ngắn (ví dụ: activate 31/1 → renew 28/2)
+      const shouldRenew = today === renewDay || 
+        (renewDay > 28 && today === new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate());
+
+      if (shouldRenew) {
+        user.membership.remainingSessions = pkg.sessionCount || 0;
+        user.membership.remainingClassCredits = 
+          pkg.classQuota === null ? null : (pkg.classQuota || 0);
+        
+        await user.save();
+        renewedCount++;
+
+        logInfo(context, `Renewed sessions for user ${user._id}`, {
+          package: pkg.name,
+          sessions: pkg.sessionCount,
+          classCredits: pkg.classQuota,
+          renewDay
+        });
+      }
+    }
+
+    logInfo(context, `Monthly session renewal completed`, { renewedCount });
+    return { success: true, renewedCount };
+  } catch (error) {
+    logError(context, 'Failed to renew monthly sessions', error);
+    throw error;
+  }
 };
