@@ -211,6 +211,14 @@ exports.calculateTemporaryUpgradeQuote = async (userId, targetPackageId, billing
   if (!user) throw new Error(`User not found: ${userId}`);
   if (!targetPkg) throw new Error(`Package not found: ${targetPackageId}`);
 
+  // KIỂM TRA: Không cho tạo temporary upgrade nếu đã có temporary active
+  if (user.membershipTemp?.isTemporary) {
+    throw Object.assign(
+      new Error('Temporary upgrade already active. Please wait until it expires or upgrade permanently.'),
+      { code: 'temp_upgrade_in_progress', status: 400 }
+    );
+  }
+
   const membership = user.membership;
   // Nếu không có gói active, coi như mua mới hoàn toàn (không có credit)
   if (!membership || membership.status !== 'active' || !membership.packageId) {
@@ -271,7 +279,7 @@ exports.calculateTemporaryUpgradeQuote = async (userId, targetPackageId, billing
     };
   }
   
-  // Tính giá gói đích theo chu kỳ (đã áp dụng discount)
+  // Tính giá gói đích theo chu kỳ mới (đã áp dụng discount)
   const cycle = normalizeBillingCycle(billingCycle);
   const multiplier = BILLING_CYCLE_MULTIPLIERS[cycle] || 1;
   const discount = BILLING_CYCLE_DISCOUNTS[cycle] || 0;
@@ -279,11 +287,23 @@ exports.calculateTemporaryUpgradeQuote = async (userId, targetPackageId, billing
   const targetPrice = Math.round(baseTarget * (1 - discount / 100));
   const targetDurationDays = (targetPkg.durationDays || 0) * multiplier;
 
-  // Tính giá gói hiện tại theo CÙNG chu kỳ (đã áp dụng discount)
-  const baseCurrent = currentPkg.price * multiplier;
-  const currentCyclePrice = Math.round(baseCurrent * (1 - discount / 100));
+  // QUAN TRỌNG: Tính giá gói hiện tại theo CHU KỲ ĐÃ MUA (không phải chu kỳ mới)
+  // User "bán" X ngày gói cũ để lấy X ngày gói mới
+  const currentBillingCycle = membership.billingCycle || 'month';
+  const currentMultiplier = BILLING_CYCLE_MULTIPLIERS[currentBillingCycle] || 1;
+  const currentDiscount = BILLING_CYCLE_DISCOUNTS[currentBillingCycle] || 0;
+  const currentDurationDays = (currentPkg.durationDays || 30) * currentMultiplier;
+  
+  // Giá đã trả cho gói hiện tại (theo chu kỳ đã mua)
+  const baseCurrent = currentPkg.price * currentMultiplier;
+  const currentPaidPrice = Math.round(baseCurrent * (1 - currentDiscount / 100));
+  
+  // Tính giá trị X ngày gói cũ (X = targetDurationDays)
+  const currentPerDay = currentPaidPrice / currentDurationDays;
+  const daysToSell = targetDurationDays; // "Bán" đúng số ngày gói mới
+  const currentCyclePrice = Math.round(currentPerDay * daysToSell);
 
-  // Chênh lệch = Giá gói mới - Giá gói cũ (cùng chu kỳ)
+  // Chênh lệch = Giá gói mới - Giá trị X ngày gói cũ
   const amountDue = Math.max(0, targetPrice - currentCyclePrice);
 
   // Tính số ngày còn lại (chỉ để hiển thị, không ảnh hưởng tính tiền)
@@ -344,18 +364,27 @@ exports.activateMembership = async (userId, packageId, transactionId, billingCyc
     let newStartDate = now;
     let newEndDate = new Date();
 
-    // Logic cộng dồn ngày - SỬA: So sánh chính xác cùng gói
+    // KIỂM TRA: Không cho activate nếu đã có temporary upgrade
+    // User phải chờ temporary hết hạn hoặc upgrade permanent
+    if (user.membershipTemp?.isTemporary) {
+      throw Object.assign(
+        new Error('Cannot activate membership while temporary upgrade is active. Please upgrade permanently or wait until temporary expires.'),
+        { code: 'temp_upgrade_in_progress', status: 400 }
+      );
+    }
+
+    // Logic cộng dồn ngày - CHỈ CHO PHÉP cùng gói (không cộng dồn khi tier giống nhau)
     const isSamePackage = user.membership?.packageId?._id?.toString() === pkg._id.toString();
-    const currentPkg = user.membership?.packageId || null;
 
     if (user.membership && user.membership.status === 'active' && user.membership.endDate > now) {
-      if (isSamePackage || (currentPkg && currentPkg.tier === pkg.tier)) {
-        // Cùng gói hoặc cùng tier: Cộng dồn thời gian
-        newStartDate = user.membership.startDate; // Giữ startDate của gói hiện tại
+      if (isSamePackage) {
+        // Cùng gói CHÍNH XÁC: Cộng dồn thời gian (gia hạn)
+        newStartDate = user.membership.startDate;
         newEndDate = new Date(user.membership.endDate);
         newEndDate.setDate(newEndDate.getDate() + appliedDurationDays);
       } else {
-        // Khác gói và khác tier: Thay thế hoàn toàn (nâng cấp)
+        // Khác gói: Thay thế hoàn toàn (không cộng dồn)
+        // User nên dùng upgradeMembership để được tính credit
         newStartDate = now;
         newEndDate = new Date(now);
         newEndDate.setDate(newEndDate.getDate() + appliedDurationDays);
