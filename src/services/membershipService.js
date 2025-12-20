@@ -98,11 +98,17 @@ exports.calculateUpgradeQuote = async (userId, targetPackageId, billingCycle = '
 
   const { price: targetPrice, multiplier, discount, cycle } = calculatePackagePrice(targetPkg, billingCycle);
 
-  // Giá trị còn lại của gói hiện tại theo ngày
+  // Giá trị còn lại của gói hiện tại theo ngày - PHẢI DÙNG GIÁ ĐÃ DISCOUNT THEO BILLING CYCLE
   const dayMs = 24 * 60 * 60 * 1000;
   const remainingDays = Math.max(0, Math.ceil((membership.endDate - now) / dayMs));
-  const currentDuration = currentPkg.durationDays || 30;
-  const currentPerDay = (currentPkg.price || 0) / currentDuration;
+  
+  // Lấy billing cycle mà user đã MUA (month/quarter/year)
+  const currentBillingCycle = membership.billingCycle || 'month';
+  const { price: currentPaidPrice, multiplier: currentMultiplier } = calculatePackagePrice(currentPkg, currentBillingCycle);
+  
+  // Tính credit dựa trên giá ĐÃ DISCOUNT và duration theo billing cycle
+  const currentDuration = (currentPkg.durationDays || 30) * currentMultiplier;
+  const currentPerDay = currentPaidPrice / currentDuration;
   const creditValue = Math.max(0, Math.round(currentPerDay * remainingDays));
 
   const amountDue = Math.max(0, targetPrice - creditValue);
@@ -403,13 +409,25 @@ const revertTempIfExpired = async (user) => {
   const now = new Date();
   if (user.membershipTemp.endDate && user.membershipTemp.endDate <= now) {
     const restore = user.membershipTemp.restoreTo || {};
+    
+    // QUAN TRỌNG: Trừ số ngày đã dùng temporary khỏi backup
+    // Vì user chỉ trả tiền CHÊNH LỆCH giữa 2 gói, không phải mua thêm thời gian
+    const tempStartDate = user.membershipTemp.startDate || now;
+    const dayMs = 24 * 60 * 60 * 1000;
+    const tempDaysUsed = Math.ceil((now - tempStartDate) / dayMs);
+    
+    // Tính endDate mới = endDate backup - số ngày đã dùng temporary
+    const originalEndDate = new Date(restore.endDate || now);
+    const adjustedEndDate = new Date(originalEndDate);
+    adjustedEndDate.setDate(adjustedEndDate.getDate() - tempDaysUsed);
+    
     user.membership = {
       packageId: restore.packageId || null,
       startDate: restore.startDate || null,
-      endDate: restore.endDate || null,
+      endDate: adjustedEndDate,  // ← Trừ đi số ngày đã dùng temporary
       remainingSessions: restore.remainingSessions ?? 0,
       remainingClassCredits: restore.remainingClassCredits ?? 0,
-      status: restore.status || 'expired',
+      status: adjustedEndDate > now ? 'active' : 'expired',
       billingCycle: restore.billingCycle || 'month',
       lastRenewalDate: restore.startDate || null
     };
