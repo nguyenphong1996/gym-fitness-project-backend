@@ -459,4 +459,6 @@ router.post('/account/delete/request', authMiddleware, userController.requestDel
  */
 router.delete('/account/delete/confirm', authMiddleware, userController.confirmDeleteAccount);
 
+router.get('/activity-logs', authMiddleware, userController.getActivityLogs);
+
 module.exports = router;

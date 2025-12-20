@@ -343,3 +343,122 @@ exports.confirmDeleteAccount = async (req, res) => {
     return res.status(500).json({ error: 'server_error', message: 'Failed to deactivate account' });
   }
 };
+
+/**
+ * @swagger
+ * /api/user/activity-logs:
+ *   get:
+ *     summary: Get user activity logs
+ *     description: Retrieve activity history for the authenticated user with pagination and filtering
+ *     tags: [User]
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 50
+ *           minimum: 1
+ *           maximum: 100
+ *         description: Number of logs to return
+ *       - in: query
+ *         name: skip
+ *         schema:
+ *           type: integer
+ *           default: 0
+ *           minimum: 0
+ *         description: Number of logs to skip (pagination)
+ *       - in: query
+ *         name: type
+ *         schema:
+ *           type: string
+ *           enum: [booking_pt, booking_class, cancel_booking_pt, cancel_booking_class, checkin, checkout, membership_upgrade, membership_activate, membership_upgrade_temp, membership_renew, favorite_add, favorite_remove, profile_update, login, logout, payment_success, payment_failed]
+ *         description: Filter by log type
+ *     responses:
+ *       200:
+ *         description: Successfully retrieved activity logs
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       _id:
+ *                         type: string
+ *                         example: "6761234567890abcdef12345"
+ *                       userId:
+ *                         type: string
+ *                         example: "6761234567890abcdef67890"
+ *                       type:
+ *                         type: string
+ *                         example: "membership_upgrade"
+ *                       timestamp:
+ *                         type: string
+ *                         format: date-time
+ *                         example: "2025-12-20T10:30:00.000Z"
+ *                       data:
+ *                         type: object
+ *                         example: { "packageName": "Premium", "billingCycle": "Quarter", "price": 3600000 }
+ *                       metadata:
+ *                         type: object
+ *                         properties:
+ *                           ipAddress:
+ *                             type: string
+ *                             example: "192.168.1.1"
+ *                           userAgent:
+ *                             type: string
+ *                             example: "Mozilla/5.0..."
+ *                           device:
+ *                             type: string
+ *                             example: "mobile"
+ *                           platform:
+ *                             type: string
+ *                             example: "android"
+ *                       createdAt:
+ *                         type: string
+ *                         format: date-time
+ *                       updatedAt:
+ *                         type: string
+ *                         format: date-time
+ *                 total:
+ *                   type: integer
+ *                   example: 150
+ *       401:
+ *         description: Unauthorized - Invalid or missing token
+ *       500:
+ *         description: Server error
+ */
+exports.getActivityLogs = async (req, res) => {
+  const activityLogService = require('../services/activityLogService');
+  
+  try {
+    const userId = req.user._id;
+    const { limit, skip, type } = req.query;
+    
+    const { logs, total } = await activityLogService.getUserLogs(userId, {
+      limit: parseInt(limit) || 50,
+      skip: parseInt(skip) || 0,
+      type,
+    });
+    
+    return res.json({
+      success: true,
+      data: logs,
+      total,
+    });
+  } catch (error) {
+    logError('getActivityLogs', 'Failed to get activity logs', error);
+    return res.status(500).json({
+      success: false,
+      message: error.message || 'Không thể tải lịch sử hoạt động',
+    });
+  }
+};
