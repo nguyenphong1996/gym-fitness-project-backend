@@ -354,11 +354,8 @@ exports.activateMembership = async (userId, packageId, transactionId, billingCyc
     const cycle = normalizeBillingCycle(billingCycle);
     const multiplier = BILLING_CYCLE_MULTIPLIERS[cycle] || 1;
     const appliedDurationDays = (pkg.durationDays || 0) * multiplier;
-    const packageSessionCount = (pkg.sessionCount || 0) * multiplier;
-    const packageClassQuota =
-      pkg.classQuota === null || pkg.classQuota === undefined
-        ? null
-        : (pkg.classQuota || 0) * multiplier;
+    const packageSessionCount = pkg.sessionCount || 0;  // KHÔNG nhân multiplier
+    const packageClassQuota = pkg.classQuota;  // KHÔNG nhân multiplier
 
     const now = new Date();
     let newStartDate = now;
@@ -458,11 +455,8 @@ exports.upgradeMembership = async (userId, targetPackageId, transactionId, billi
     const newEndDate = new Date(now);
     newEndDate.setDate(newEndDate.getDate() + (targetPkg.durationDays || 0) * multiplier);
 
-    const newSessions = (targetPkg.sessionCount || 0) * multiplier;
-    const newClassCredits =
-      targetPkg.classQuota === null || targetPkg.classQuota === undefined
-        ? null
-        : (targetPkg.classQuota || 0) * multiplier;
+    const newSessions = targetPkg.sessionCount || 0;  // KHÔNG nhân multiplier
+    const newClassCredits = targetPkg.classQuota;  // KHÔNG nhân multiplier
 
     // XỬ LÝ TEMPORARY UPGRADE: Khi upgrade permanent, clear temporary
     // User đã được tính credit từ CẢ HAI (temporary + backup) trong calculateUpgradeQuote
@@ -586,11 +580,8 @@ exports.upgradeMembershipTemporary = async (userId, targetPackageId, transaction
     adjustedBackupEndDate.setDate(adjustedBackupEndDate.getDate() - appliedDurationDays);
     backup.endDate = adjustedBackupEndDate;
 
-    const newSessions = (targetPkg.sessionCount || 0) * multiplier;
-    const newClassCredits =
-      targetPkg.classQuota === null || targetPkg.classQuota === undefined
-        ? null
-        : (targetPkg.classQuota || 0) * multiplier;
+    const newSessions = targetPkg.sessionCount || 0;  // KHÔNG nhân multiplier
+    const newClassCredits = targetPkg.classQuota;  // KHÔNG nhân multiplier
 
     // Đổi startDate sang ngày upgrade (renew theo ngày này)
     user.membership = {
