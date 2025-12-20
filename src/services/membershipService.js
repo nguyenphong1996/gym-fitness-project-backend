@@ -373,18 +373,18 @@ exports.activateMembership = async (userId, packageId, transactionId, billingCyc
       );
     }
 
-    // Logic cộng dồn ngày - CHỈ CHO PHÉP cùng gói (không cộng dồn khi tier giống nhau)
+    // Logic cộng dồn ngày - Cùng gói hoặc cùng tier
     const isSamePackage = user.membership?.packageId?._id?.toString() === pkg._id.toString();
+    const currentPkg = user.membership?.packageId || null;
 
     if (user.membership && user.membership.status === 'active' && user.membership.endDate > now) {
-      if (isSamePackage) {
-        // Cùng gói CHÍNH XÁC: Cộng dồn thời gian (gia hạn)
+      if (isSamePackage || (currentPkg && currentPkg.tier === pkg.tier)) {
+        // Cùng gói hoặc cùng tier: Cộng dồn thời gian (gia hạn)
         newStartDate = user.membership.startDate;
         newEndDate = new Date(user.membership.endDate);
         newEndDate.setDate(newEndDate.getDate() + appliedDurationDays);
       } else {
-        // Khác gói: Thay thế hoàn toàn (không cộng dồn)
-        // User nên dùng upgradeMembership để được tính credit
+        // Khác gói và khác tier: Thay thế hoàn toàn
         newStartDate = now;
         newEndDate = new Date(now);
         newEndDate.setDate(newEndDate.getDate() + appliedDurationDays);
