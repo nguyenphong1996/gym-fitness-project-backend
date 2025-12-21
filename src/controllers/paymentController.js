@@ -328,6 +328,7 @@ exports.createVnpayTokenUrl = async (req, res, next) => {
             isTemporary,
             upgradeFromPackageId,
             creditValue,
+            isRenewal,
         });
 
         // Ghi nhận transaction (cập nhật thêm packageId nếu có)
@@ -343,6 +344,7 @@ exports.createVnpayTokenUrl = async (req, res, next) => {
                         isTemporary,
                         upgradeFromPackageId,
                         creditValue
+                        , isRenewal
                     }
                 }
             );
@@ -362,7 +364,7 @@ exports.createVnpayTokenUrl = async (req, res, next) => {
  */
 exports.createVnpayTokenPayUrl = async (req, res, next) => {
     try {
-        const { amount, orderInfo, token, userId, cardType = '01', bankCode, packageId, billingCycle, isUpgrade = false, isTemporary = false } = req.body;
+        const { amount, orderInfo, token, userId, cardType = '01', bankCode, packageId, billingCycle, isUpgrade = false, isTemporary = false, isRenewal = false } = req.body;
         if (!token) {
             return res.status(400).json({ message: 'token is required' });
         }
@@ -457,6 +459,7 @@ exports.createVnpayTokenPayUrl = async (req, res, next) => {
             hasToken: !!token,
             isUpgrade: upgradeFlag,
             isTemporary,
+            isRenewal,
         });
 
         const { vnpUrl, txnRef } = await vnpayService.createTokenUrl(req, {
@@ -473,6 +476,7 @@ exports.createVnpayTokenPayUrl = async (req, res, next) => {
             isTemporary,
             upgradeFromPackageId,
             creditValue,
+            isRenewal,
         });
 
         if (packageId) {
@@ -487,6 +491,7 @@ exports.createVnpayTokenPayUrl = async (req, res, next) => {
                         isTemporary,
                         upgradeFromPackageId,
                         creditValue
+                        , isRenewal
                     }
                 }
             );
