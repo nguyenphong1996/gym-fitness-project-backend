@@ -20,6 +20,7 @@ const paymentTransactionSchema = new mongoose.Schema({
   upgradeFromPackageId: { type: String, default: null },
   creditValue: { type: Number, default: 0 },
   isTemporary: { type: Boolean, default: false },
+  isRenewal: { type: Boolean, default: false },
   rawReturnParams: { type: Object, default: {} },
   rawIpnParams: { type: Object, default: {} },
   paidAt: { type: Date, default: null },

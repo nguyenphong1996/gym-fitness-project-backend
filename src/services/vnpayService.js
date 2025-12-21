@@ -84,6 +84,7 @@ exports.createPaymentUrl = async (req, amount, orderInfo, bankCode, cardType, op
         upgradeFromPackageId = null,
         creditValue = 0,
         isTemporary = false,
+        isRenewal = false,
     } = options;
     process.env.TZ = 'Asia/Ho_Chi_Minh';
     
@@ -143,7 +144,8 @@ exports.createPaymentUrl = async (req, amount, orderInfo, bankCode, cardType, op
             isUpgrade,
             upgradeFromPackageId,
             creditValue,
-            isTemporary
+            isTemporary,
+            isRenewal
         });
     } catch (err) {
         console.error('Không lưu được PaymentTransaction:', err.message);
@@ -202,6 +204,7 @@ exports.createTokenUrl = async (req, {
     upgradeFromPackageId = null,
     creditValue = 0,
     isTemporary = false,
+    isRenewal = false,
 }) => {
     process.env.TZ = 'Asia/Ho_Chi_Minh';
     const date = new Date();
@@ -281,6 +284,7 @@ exports.createTokenUrl = async (req, {
         upgradeFromPackageId,
         creditValue,
         isTemporary,
+        isRenewal,
     });
 
     // Lưu log pending (không làm hỏng flow nếu DB lỗi)
@@ -297,7 +301,8 @@ exports.createTokenUrl = async (req, {
             isUpgrade,
             upgradeFromPackageId,
             creditValue,
-            isTemporary
+            isTemporary,
+            isRenewal
         });
     } catch (err) {
         console.error('Không lưu được PaymentTransaction:', err.message);
@@ -453,7 +458,16 @@ exports.updateTransactionStatus = async ({ txnRef, rspCode, transactionStatus, p
                 await tx.save();
             }
             try {
-                if (tx.isUpgrade && tx.isTemporary) {
+                if (tx.isRenewal) {
+                    // Renewal: extend endDate for same package using activateMembership
+                    await membershipService.activateMembership(tx.userId, resolvedPackageId, tx.txnRef, tx.billingCycle);
+                    logInfo('vnpayService.updateTransactionStatus', 'Auto-renewed membership', {
+                        userId: tx.userId,
+                        packageId: resolvedPackageId,
+                        txnRef: tx.txnRef,
+                        billingCycle: tx.billingCycle
+                    });
+                } else if (tx.isUpgrade && tx.isTemporary) {
                     await membershipService.upgradeMembershipTemporary(tx.userId, resolvedPackageId, tx.txnRef, tx.billingCycle);
                     logInfo('vnpayService.updateTransactionStatus', 'Auto-temporary-upgraded membership', {
                         userId: tx.userId,
