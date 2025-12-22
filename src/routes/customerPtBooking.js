@@ -401,7 +401,11 @@ router.get('/bookings', authMiddleware, customerMiddleware, ptBookingController.
  * @swagger
  * /api/customer/pt/bookings/{bookingId}:
  *   delete:
- *     summary: Huỷ lịch PT (trước giờ bắt đầu)
+ *     summary: Hủy lịch PT với chính sách hoàn tiền
+ *     description: |
+ *       Chính sách hủy:
+ *       - **Hủy trước 24h**: Hoàn 80% phí + hoàn lượt miễn phí
+ *       - **Hủy trong 24h**: Hoàn 50% phí + mất lượt miễn phí
  *     tags: [PT Booking]
  *     security:
  *       - bearerAuth: []
@@ -413,7 +417,7 @@ router.get('/bookings', authMiddleware, customerMiddleware, ptBookingController.
  *           type: string
  *     responses:
  *       200:
- *         description: Huỷ thành công
+ *         description: Hủy thành công
  *         content:
  *           application/json:
  *             schema:
@@ -421,8 +425,15 @@ router.get('/bookings', authMiddleware, customerMiddleware, ptBookingController.
  *               properties:
  *                 success: { type: boolean }
  *                 message: { type: string, example: "Booking cancelled successfully" }
+ *                 cancellation:
+ *                   type: object
+ *                   properties:
+ *                     refundAmount: { type: number, example: 280000 }
+ *                     refundPercent: { type: number, example: 80 }
+ *                     sessionRestored: { type: boolean, example: true }
+ *                     policy: { type: string, example: "Hủy trước 24h: Hoàn 80% phí + hoàn lượt miễn phí" }
  *       400:
- *         description: Booking đã bắt đầu hoặc không thể huỷ
+ *         description: Booking đã bắt đầu hoặc không thể hủy
  *         content:
  *           application/json:
  *             schema:
@@ -468,5 +479,38 @@ router.get('/bookings', authMiddleware, customerMiddleware, ptBookingController.
  *                 message: { type: string }
  */
 router.delete('/bookings/:bookingId', authMiddleware, customerMiddleware, ptBookingController.cancelBooking);
+
+/**
+ * @swagger
+ * /api/customer/pt/credits:
+ *   get:
+ *     summary: Xem số lượt PT miễn phí còn lại và thông tin giá
+ *     tags: [PT Booking]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Thông tin lượt PT và giá
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean }
+ *                 hasMembership: { type: boolean }
+ *                 packageName: { type: string, nullable: true }
+ *                 packageTier: { type: number, nullable: true }
+ *                 remainingSessions: { type: number }
+ *                 ptBookingBasePrice: { type: number, example: 350000 }
+ *                 discountPercent: { type: number, example: 20 }
+ *                 priceAfterDiscount: { type: number, example: 280000 }
+ *                 membershipEndDate: { type: string, format: date-time, nullable: true }
+ *                 message: { type: string }
+ *       401:
+ *         description: Chưa đăng nhập
+ *       500:
+ *         description: Lỗi hệ thống
+ */
+router.get('/credits', authMiddleware, customerMiddleware, ptBookingController.getMyPtCredits);
 
 module.exports = router;

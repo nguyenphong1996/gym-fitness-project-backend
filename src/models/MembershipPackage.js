@@ -14,6 +14,7 @@ const MembershipPackageSchema = new mongoose.Schema({
   sessionCount: { type: Number, default: 0 }, // Số buổi PT (nếu có)
   classQuota: { type: Number, default: 0, min: 0 }, // Số lượt class tặng (null/undefined = không giới hạn)
   classDiscountPercentAfterQuota: { type: Number, default: 0, min: 0, max: 100 }, // Giảm giá sau khi hết quota
+  ptBookingDiscountPercent: { type: Number, default: 0, min: 0, max: 100 }, // Giảm giá PT booking sau khi hết lượt miễn phí
   
   // Facility Access Permissions
   facilityAccess: {

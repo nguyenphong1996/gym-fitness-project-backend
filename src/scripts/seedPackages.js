@@ -12,6 +12,7 @@ const packages = [
     sessionCount: 0,
     classQuota: 0,
     classDiscountPercentAfterQuota: 0,
+    ptBookingDiscountPercent: 0,
     description:
       'Không giới hạn khu cardio/tạ/máy; locker tiêu chuẩn; không gồm lớp nhóm hay ưu đãi PT; không khăn/nước miễn phí.',
     facilityAccess: {
@@ -30,6 +31,7 @@ const packages = [
     sessionCount: 2, // Tặng 2 buổi PT định hướng
     classQuota: 5, // Tặng 5 lượt class
     classDiscountPercentAfterQuota: 20, // Hết quota giảm 20%
+    ptBookingDiscountPercent: 0, // Không giảm giá PT booking
     description:
       'Gồm toàn bộ quyền lợi Basic; tham gia & đặt chỗ lớp không giới hạn trên app; tặng 2 buổi PT định hướng; tặng 5 lượt class/tháng; hết quota giảm 20% phí class; có nước uống miễn phí.',
     facilityAccess: {
@@ -48,6 +50,7 @@ const packages = [
     sessionCount: 5, // Tặng 5 buổi PT mỗi tháng
     classQuota: null, // Không giới hạn class
     classDiscountPercentAfterQuota: 0,
+    ptBookingDiscountPercent: 20, // Giảm 20% phí booking PT khi hết lượt miễn phí
     description:
       'Gồm toàn bộ quyền lợi Plus; khăn & nước/đồ uống miễn phí; locker VIP; tặng 5 buổi PT mỗi tháng; class không giới hạn; giảm 10–20% khi mua gói PT; giảm 20% phí booking PT.',
     facilityAccess: {

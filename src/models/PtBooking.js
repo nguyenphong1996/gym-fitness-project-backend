@@ -18,6 +18,17 @@ const PtBookingSchema = new mongoose.Schema({
   cancelledBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   cancelReason: { type: String, trim: true, maxlength: 200 },
   source: { type: String, enum: ['customer'], default: 'customer' },
+  
+  // Pricing info
+  priceCharged: { type: Number, default: 0 }, // Số tiền thực tế phải trả (VND)
+  discountPercent: { type: Number, default: 0, min: 0, max: 100 }, // % giảm giá từ membership
+  usedMembershipSession: { type: Boolean, default: false }, // Có dùng lượt PT miễn phí không
+  
+  // Refund info (when cancelled)
+  refundAmount: { type: Number, default: 0 }, // Số tiền hoàn lại (VND)
+  refundPercent: { type: Number, default: 0, min: 0, max: 100 }, // % hoàn tiền
+  sessionRestored: { type: Boolean, default: false }, // Có hoàn lượt miễn phí không
+  
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now }
 });

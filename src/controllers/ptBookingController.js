@@ -2,6 +2,7 @@ const PtBooking = require('../models/PtBooking');
 const User = require('../models/User');
 const Class = require('../models/Class');
 const StaffAvailability = require('../models/StaffAvailability');
+const MembershipPackage = require('../models/MembershipPackage');
 const {
   buildSlotsForDate,
   findSlotByKey,
@@ -9,6 +10,7 @@ const {
   overlaps
 } = require('../utils/ptSlots');
 const { logError, logSuccess, logWarning, logDebug } = require('../utils/logger');
+const { PT_BOOKING_BASE_PRICE } = require('../config/pricing');
 
 const ACTIVE_CLASS_STATUSES = [
   'scheduled',
@@ -105,8 +107,22 @@ function formatBookingResponse(booking, options = {}) {
     endTime: booking.endTime,
     status: booking.status,
     notes: booking.notes || null,
-    cancelledAt: booking.cancelledAt || null
+    cancelledAt: booking.cancelledAt || null,
+    pricing: {
+      priceCharged: booking.priceCharged ?? 0,
+      discountPercent: booking.discountPercent ?? 0,
+      usedMembershipSession: booking.usedMembershipSession ?? false
+    }
   };
+
+  // Include refund info if booking is cancelled
+  if (booking.status === 'cancelled' && booking.cancelledAt) {
+    payload.refund = {
+      refundAmount: booking.refundAmount ?? 0,
+      refundPercent: booking.refundPercent ?? 0,
+      sessionRestored: booking.sessionRestored ?? false
+    };
+  }
 
   if (includeStaff && booking.staff) {
     payload.staff = {
@@ -387,6 +403,64 @@ exports.createBooking = async (req, res) => {
       });
     }
 
+    // ============ PRICING LOGIC: Check membership & calculate price ============
+    const customer = await User.findById(req.user.id).populate('membership.packageId');
+    if (!customer) {
+      return res.status(404).json({
+        error: 'customer_not_found',
+        message: 'Customer not found'
+      });
+    }
+
+    const membership = customer.membership;
+    const isMembershipActive = 
+      membership?.status === 'active' && 
+      membership.endDate && 
+      new Date(membership.endDate) > now;
+
+    let priceCharged = PT_BOOKING_BASE_PRICE; // Default: 350,000 VND
+    let discountPercent = 0;
+    let usedMembershipSession = false;
+
+    // Check if customer has active membership with PT benefits
+    if (isMembershipActive && membership.packageId) {
+      const pkg = membership.packageId;
+      const remainingSessions = membership.remainingSessions ?? 0;
+
+      // CASE 1: Customer has free PT sessions remaining
+      if (remainingSessions > 0) {
+        priceCharged = 0;
+        usedMembershipSession = true;
+        // Will deduct after booking is created
+        logDebug(context, 'Using free PT session', {
+          customerId: req.user.id,
+          remainingSessions,
+          packageName: pkg.name
+        });
+      } 
+      // CASE 2: No free sessions, but Premium gets 20% discount
+      else if (pkg.ptBookingDiscountPercent > 0) {
+        discountPercent = pkg.ptBookingDiscountPercent;
+        priceCharged = Math.round(PT_BOOKING_BASE_PRICE * (1 - discountPercent / 100));
+        logDebug(context, 'Applying PT booking discount', {
+          customerId: req.user.id,
+          packageName: pkg.name,
+          discountPercent,
+          priceCharged
+        });
+      }
+      // CASE 3: No free sessions, no discount (Basic, Plus after free sessions)
+      else {
+        priceCharged = PT_BOOKING_BASE_PRICE;
+      }
+    } else {
+      // No active membership or expired
+      priceCharged = PT_BOOKING_BASE_PRICE;
+    }
+
+    if (priceCharged < 0) priceCharged = 0;
+
+    // Create booking with pricing information
     const booking = await PtBooking.create({
       staffId,
       customerId: req.user.id,
@@ -395,19 +469,41 @@ exports.createBooking = async (req, res) => {
       startTime: slot.startTime,
       endTime: slot.endTime,
       notes: note ? String(note).trim().slice(0, 500) : undefined,
-      status: 'pending_staff'
+      status: 'pending_staff',
+      priceCharged,
+      discountPercent,
+      usedMembershipSession
     });
+
+    // Deduct membership session if used
+    if (usedMembershipSession) {
+      membership.remainingSessions = (membership.remainingSessions ?? 0) - 1;
+      await customer.save();
+      logSuccess(context, 'Deducted PT session from membership', {
+        customerId: req.user.id,
+        remainingSessions: membership.remainingSessions
+      });
+    }
 
     logSuccess(context, 'Customer booked PT slot', {
       bookingId: booking._id,
       staffId,
-      customerId: req.user.id
+      customerId: req.user.id,
+      priceCharged,
+      usedMembershipSession
     });
 
     return res.status(201).json({
       success: true,
       message: 'PT booked successfully',
-      booking: formatBookingResponse(booking)
+      booking: {
+        ...formatBookingResponse(booking),
+        pricing: {
+          priceCharged,
+          discountPercent,
+          usedMembershipSession
+        }
+      }
     });
   } catch (error) {
     if (error.code === 11000) {
@@ -510,29 +606,154 @@ exports.cancelBooking = async (req, res) => {
       });
     }
 
-    if (booking.startTime <= new Date()) {
+    const now = new Date();
+    if (booking.startTime <= now) {
       return res.status(400).json({
         error: 'already_started',
         message: 'Cannot cancel a booking that has started'
       });
     }
 
+    // ============ CANCELLATION PENALTY POLICY ============
+    const hoursUntilBooking = (booking.startTime - now) / (1000 * 60 * 60);
+    let refundPercent = 0;
+    let refundAmount = 0;
+    let sessionRestored = false;
+
+    // CASE 1: Cancel more than 24 hours before
+    if (hoursUntilBooking > 24) {
+      // Refund 80% of paid amount
+      if (booking.priceCharged > 0) {
+        refundPercent = 80;
+        refundAmount = Math.round(booking.priceCharged * 0.8);
+      }
+      // Restore free session
+      if (booking.usedMembershipSession) {
+        sessionRestored = true;
+        const customer = await User.findById(req.user.id);
+        if (customer && customer.membership) {
+          customer.membership.remainingSessions = (customer.membership.remainingSessions ?? 0) + 1;
+          await customer.save();
+          logSuccess(context, 'Restored PT session (>24h cancellation)', {
+            customerId: req.user.id,
+            remainingSessions: customer.membership.remainingSessions
+          });
+        }
+      }
+    } 
+    // CASE 2: Cancel within 24 hours before
+    else {
+      // Refund only 50% of paid amount
+      if (booking.priceCharged > 0) {
+        refundPercent = 50;
+        refundAmount = Math.round(booking.priceCharged * 0.5);
+      }
+      // Free session is LOST (no restore)
+      sessionRestored = false;
+      if (booking.usedMembershipSession) {
+        logWarning(context, 'Free PT session lost due to late cancellation (<24h)', {
+          customerId: req.user.id,
+          bookingId
+        });
+      }
+    }
+
+    // Update booking with cancellation info
     booking.status = 'cancelled';
-    booking.cancelledAt = new Date();
+    booking.cancelledAt = now;
     booking.cancelledBy = req.user.id;
+    booking.refundAmount = refundAmount;
+    booking.refundPercent = refundPercent;
+    booking.sessionRestored = sessionRestored;
     await booking.save();
 
-    logSuccess(context, 'Customer cancelled PT booking', { bookingId });
+    logSuccess(context, 'Customer cancelled PT booking', { 
+      bookingId,
+      hoursUntilBooking: hoursUntilBooking.toFixed(2),
+      refundPercent,
+      refundAmount,
+      sessionRestored
+    });
 
     return res.json({
       success: true,
-      message: 'Booking cancelled successfully'
+      message: 'Booking cancelled successfully',
+      cancellation: {
+        refundAmount,
+        refundPercent,
+        sessionRestored,
+        policy: hoursUntilBooking > 24 
+          ? 'Hủy trước 24h: Hoàn 80% phí + hoàn lượt miễn phí'
+          : 'Hủy trong 24h: Hoàn 50% phí + mất lượt miễn phí'
+      }
     });
   } catch (error) {
     logError(context, 'Failed to cancel booking', error);
     return res.status(500).json({
       error: 'server_error',
       message: 'Failed to cancel booking'
+    });
+  }
+};
+
+exports.getMyPtCredits = async (req, res) => {
+  const context = 'ptBookingController.getMyPtCredits';
+  try {
+    const customer = await User.findById(req.user.id).populate('membership.packageId');
+    
+    if (!customer) {
+      return res.status(404).json({
+        error: 'customer_not_found',
+        message: 'Customer not found'
+      });
+    }
+
+    const membership = customer.membership;
+    const now = new Date();
+    const isMembershipActive = 
+      membership?.status === 'active' && 
+      membership.endDate && 
+      new Date(membership.endDate) > now;
+
+    if (!isMembershipActive || !membership.packageId) {
+      return res.json({
+        success: true,
+        hasMembership: false,
+        remainingSessions: 0,
+        packageName: null,
+        ptBookingPrice: PT_BOOKING_BASE_PRICE,
+        discountPercent: 0
+      });
+    }
+
+    const pkg = membership.packageId;
+    const remainingSessions = membership.remainingSessions ?? 0;
+    const discountPercent = pkg.ptBookingDiscountPercent ?? 0;
+    const priceAfterDiscount = discountPercent > 0 
+      ? Math.round(PT_BOOKING_BASE_PRICE * (1 - discountPercent / 100))
+      : PT_BOOKING_BASE_PRICE;
+
+    return res.json({
+      success: true,
+      hasMembership: true,
+      packageName: pkg.name,
+      packageTier: pkg.tier,
+      remainingSessions,
+      ptBookingBasePrice: PT_BOOKING_BASE_PRICE,
+      discountPercent,
+      priceAfterDiscount,
+      membershipEndDate: membership.endDate,
+      message: remainingSessions > 0 
+        ? `Bạn còn ${remainingSessions} lượt PT miễn phí`
+        : discountPercent > 0 
+          ? `Bạn được giảm ${discountPercent}% khi booking PT (${priceAfterDiscount.toLocaleString()} VND)`
+          : `Giá booking PT: ${PT_BOOKING_BASE_PRICE.toLocaleString()} VND`
+    });
+  } catch (error) {
+    logError(context, 'Failed to get PT credits', error);
+    return res.status(500).json({
+      error: 'server_error',
+      message: 'Failed to get PT credits'
     });
   }
 };
