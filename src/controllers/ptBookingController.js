@@ -496,7 +496,7 @@ exports.cancelBooking = async (req, res) => {
     }
 
     const booking = await PtBooking.findById(bookingId);
-    if (!booking || booking.customerId.toString() !== req.user.id) {
+    if (!booking || booking.customerId.toString() !== req.user.id.toString()) {
       return res.status(404).json({
         error: 'booking_not_found',
         message: 'Booking not found'

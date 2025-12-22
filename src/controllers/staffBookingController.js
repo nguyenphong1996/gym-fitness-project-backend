@@ -132,7 +132,7 @@ exports.acceptStaffBooking = async (req, res) => {
     }
 
     const booking = await PtBooking.findById(bookingId);
-    if (!booking || booking.staffId.toString() !== req.user.id) {
+    if (!booking || booking.staffId.toString() !== req.user.id.toString()) {
       return res.status(404).json({
         error: 'booking_not_found',
         message: 'Booking not found'
@@ -177,7 +177,7 @@ exports.declineStaffBooking = async (req, res) => {
     }
 
     const booking = await PtBooking.findById(bookingId);
-    if (!booking || booking.staffId.toString() !== req.user.id) {
+    if (!booking || booking.staffId.toString() !== req.user.id.toString()) {
       return res.status(404).json({
         error: 'booking_not_found',
         message: 'Booking not found'
@@ -232,7 +232,7 @@ exports.cancelStaffBooking = async (req, res) => {
     }
 
     const booking = await PtBooking.findById(bookingId);
-    if (!booking || booking.staffId.toString() !== req.user.id) {
+    if (!booking || booking.staffId.toString() !== req.user.id.toString()) {
       return res.status(404).json({
         error: 'booking_not_found',
         message: 'Booking not found'

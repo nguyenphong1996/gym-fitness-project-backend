@@ -286,7 +286,7 @@ exports.getEnrollmentDetail = async (req, res) => {
     }
 
     // Kiểm tra quyền: user chỉ có thể xem enrollment của mình
-    if (enrollment.userId.toString() !== userId) {
+    if (enrollment.userId.toString() !== userId.toString()) {
       return res.status(403).json({
         success: false,
         message: 'You do not have permission to view this enrollment'
@@ -342,7 +342,7 @@ exports.cancelEnrollment = async (req, res) => {
     }
 
     // Kiểm tra quyền
-    if (enrollment.userId.toString() !== userId) {
+    if (enrollment.userId.toString() !== userId.toString()) {
       return res.status(403).json({
         success: false,
         message: 'You do not have permission to cancel this enrollment'
