@@ -435,16 +435,16 @@ exports.createBooking = async (req, res) => {
         logDebug(context, 'Using free PT session', {
           customerId: req.user.id,
           remainingSessions,
-          packageName: pkg.name
+          packageName: pkg?.name || pkg
         });
       } 
       // CASE 2: No free sessions, but Premium gets 20% discount
-      else if (pkg.ptBookingDiscountPercent > 0) {
+      else if (pkg?.ptBookingDiscountPercent > 0) {
         discountPercent = pkg.ptBookingDiscountPercent;
         priceCharged = Math.round(PT_BOOKING_BASE_PRICE * (1 - discountPercent / 100));
         logDebug(context, 'Applying PT booking discount', {
           customerId: req.user.id,
-          packageName: pkg.name,
+          packageName: pkg?.name || pkg,
           discountPercent,
           priceCharged
         });
