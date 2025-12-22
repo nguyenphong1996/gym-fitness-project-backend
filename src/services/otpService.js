@@ -48,26 +48,15 @@ function ensureEsmsConfigured() {
  * Gets the appropriate content for the OTP message based on the type.
  * @param {string} type - The type of OTP ('register', 'login', 'delete_account').
  * @returns {string} The message content.
- * NOTE: eSMS test API requires exact template: "XXXX là mã xác nhận đăng ký Baotrixemay của bạn"
+ * NOTE: eSMS test API template (fixed): "XXXX la ma xac minh dang ky Baotrixemay cua ban"
+ * - Only XXXX can be changed (the OTP code)
+ * - Must use non-accented Vietnamese
+ * - Must use "dang ky" (register) for test API
  */
 function getOtpContent(type, otp, brandName) {
-  const safeBrandName = brandName || 'Baotrixemay';
-
-  // eSMS test API requires this exact format with Vietnamese accents
-  switch (type) {
-    case 'register':
-      return `${otp} là mã xác nhận đăng ký ${safeBrandName} của bạn`;
-    case 'login':
-      return `${otp} là mã xác nhận đăng ký ${safeBrandName} của bạn`;
-    case 'staff_first_login':
-      return `${otp} là mã kích hoạt tài khoản PT ${safeBrandName}`;
-    case 'staff_login':
-      return `${otp} là mã xác nhận đăng nhập PT ${safeBrandName}`;
-    case 'delete_account':
-      return `${otp} là mã xác nhận xóa tài khoản ${safeBrandName} của bạn`;
-    default:
-      return `${otp} là mã xác nhận ${safeBrandName} của bạn`;
-  }
+  // eSMS test API requires exact template - cannot modify content or brandname
+  // Template: "XXXX la ma xac minh dang ky Baotrixemay cua ban"
+  return `${otp} la ma xac minh dang ky Baotrixemay cua ban`;
 }
 
 /**
