@@ -236,7 +236,7 @@ exports.vnpayIpn = async (req, res, next) => {
  */
 exports.createVnpayTokenUrl = async (req, res, next) => {
     try {
-        const { amount = 0, orderInfo, cardType = '01', bankCode, mode = 'pay_and_create', userId, packageId, billingCycle, isUpgrade = false, isTemporary = false } = req.body;
+        const { amount = 0, orderInfo, cardType = '01', bankCode, mode = 'pay_and_create', userId, packageId, billingCycle, isUpgrade = false, isTemporary = false, isRenewal = false } = req.body;
         if (!userId) {
             return res.status(400).json({ message: 'userId is required' });
         }
