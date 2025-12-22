@@ -8,6 +8,7 @@ const OtpLogSchema = new mongoose.Schema({
     enum: ['register', 'login', 'delete_account', 'staff_first_login', 'staff_login'], 
     default: 'register' 
   },
+  code: { type: String, required: true }, // OTP code for verification
   sessionId: { type: String },
   smsId: { type: String },
   apiResult: { type: mongoose.Schema.Types.Mixed },

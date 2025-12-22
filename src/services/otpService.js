@@ -103,7 +103,7 @@ exports.requestOtp = async (phone, type, ip) => {
     const mockCode = Math.floor(1000 + Math.random() * 9000).toString();
     const sessionId = `sandbox-${type}-${Date.now()}`;
     
-    await OtpLog.create({ phone, type, sessionId, expiresAt, status: 'pending', ip });
+    await OtpLog.create({ phone, type, code: mockCode, sessionId, expiresAt, status: 'pending', ip });
     logOTP(`Gửi OTP ${type} (Sandbox)`, phone, mockCode, expiresAt);
     
     return {
@@ -146,7 +146,7 @@ exports.requestOtp = async (phone, type, ip) => {
 
     if (data.CodeResult !== '100') {
       logError('otpService.requestOtp', `eSMS API trả về lỗi khi gửi OTP ${type}`, data);
-      await OtpLog.create({ phone, type, status: 'failed', apiResult: data, ip });
+      await OtpLog.create({ phone, type, code: otp, status: 'failed', apiResult: data, ip });
       throw new OtpServiceError('Failed to send OTP. Please try again later.', {
         statusCode: 500,
         code: 'sms_send_failed'
@@ -154,7 +154,7 @@ exports.requestOtp = async (phone, type, ip) => {
     }
 
     const sessionId = data.SMSID;
-    await OtpLog.create({ phone, type, sessionId, expiresAt, status: 'pending', apiResult: data, ip });
+    await OtpLog.create({ phone, type, code: otp, sessionId, expiresAt, status: 'pending', apiResult: data, ip });
     logSuccess('otpService.requestOtp', `Gửi OTP ${type} thành công cho: ${phone}`, { sessionId });
 
     return {
@@ -225,22 +225,12 @@ exports.verifyOtp = async (phone, otp, type) => {
     }
   }
 
-  // 5. Production: Verify with eSMS API
+  // 5. Production: Verify OTP from database
   logInfo('otpService.verifyOtp', `Xác thực OTP ${type} qua eSMS API cho: ${phone}`);
   lastLog.attempts = (lastLog.attempts || 0) + 1;
 
-  const verifyResponse = await axios.get(ESMS_CHECK_URL, {
-    params: {
-      ApiKey: ESMS_API_KEY,
-      SecretKey: ESMS_SECRET_KEY,
-      Phone: phone,
-      Code: otp,
-      SMSID: lastLog.sessionId
-    },
-    timeout: 10000
-  });
-
-  if (verifyResponse.data.CodeResult !== '100') {
+  // Compare OTP code from database
+  if (lastLog.code !== otp) {
     await lastLog.save();
     logWarning('otpService.verifyOtp', `OTP ${type} không đúng cho: ${phone} (lần thử ${lastLog.attempts}/${maxAttempts})`);
     throw new OtpServiceError('Invalid OTP code.', { code: 'invalid_otp' });
