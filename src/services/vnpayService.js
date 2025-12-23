@@ -248,9 +248,10 @@ exports.createTokenUrl = async (req, {
         params['vnp_card_type'] = cardType; // 01 noi dia, 02 quoc te
     }
 
-    if (bankCode) {
-        params['vnp_bank_code'] = bankCode;
-    }
+        // Chỉ truyền bankCode nếu có giá trị thực sự, tránh undefined/null
+        if (typeof bankCode === 'string' && bankCode.trim() !== '') {
+            params['vnp_bank_code'] = bankCode;
+        }
 
     // Với token_pay và pay_and_create cần số tiền
     if (command !== 'token_create') {
